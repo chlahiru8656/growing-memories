@@ -47,6 +47,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        forest: {
+          trunk: "hsl(var(--forest-trunk))",
+          bark: "hsl(var(--forest-bark))",
+          moss: "hsl(var(--forest-moss))",
+          happy: "hsl(var(--forest-leaf-happy))",
+          sad: "hsl(var(--forest-leaf-sad))",
+          special: "hsl(var(--forest-leaf-special))",
+          normal: "hsl(var(--forest-leaf-normal))",
+          canopy: "hsl(var(--forest-canopy))",
+          ground: "hsl(var(--forest-ground))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
