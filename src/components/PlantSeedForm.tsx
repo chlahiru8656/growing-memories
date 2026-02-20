@@ -1,18 +1,17 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Leaf, Image as ImageIcon, X } from 'lucide-react';
+import { Upload, Leaf, Image as ImageIcon, X, CalendarDays } from 'lucide-react';
 import { Memory, Emotion } from '@/types/memory';
-import { Button } from '@/components/ui/button';
 
 interface PlantSeedFormProps {
   onPlant: (memory: Omit<Memory, 'id' | 'timestamp'>) => void;
 }
 
-const EMOTIONS: { value: Emotion; label: string; color: string }[] = [
-  { value: 'Normal', label: '🌿 Normal', color: 'border-forest-normal' },
-  { value: 'Happy', label: '✨ Happy', color: 'border-forest-happy' },
-  { value: 'Sad', label: '💧 Sad', color: 'border-forest-sad' },
-  { value: 'Special', label: '⭐ Special', color: 'border-forest-special' },
+const EMOTIONS: { value: Emotion; label: string }[] = [
+  { value: 'Normal', label: '🌿 Normal' },
+  { value: 'Happy', label: '✨ Happy' },
+  { value: 'Sad', label: '💧 Sad' },
+  { value: 'Special', label: '⭐ Special' },
 ];
 
 export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
@@ -20,6 +19,7 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
   const [imagePreview, setImagePreview] = useState<string>('');
   const [description, setDescription] = useState('');
   const [emotion, setEmotion] = useState<Emotion>('Normal');
+  const [memoryDate, setMemoryDate] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -50,14 +50,17 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageUrl || !description.trim()) return;
-    onPlant({ imageUrl, description: description.trim(), emotion });
+    if (!imageUrl || !description.trim() || !memoryDate) return;
+    onPlant({ imageUrl, description: description.trim(), emotion, memoryDate });
     setImageUrl('');
     setImagePreview('');
     setDescription('');
     setEmotion('Normal');
+    setMemoryDate('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const isValid = !!imageUrl && !!description.trim() && !!memoryDate;
 
   return (
     <motion.form
@@ -118,7 +121,7 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
           >
-            <img src={imagePreview} alt="Preview" className="w-full h-36 object-cover" />
+            <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover" />
             <button
               type="button"
               onClick={clearImage}
@@ -133,6 +136,26 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
               </div>
             </div>
           </motion.div>
+        )}
+      </div>
+
+      {/* Date of Memory */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+          <CalendarDays className="w-3.5 h-3.5" />
+          Date of Memory
+        </label>
+        <input
+          type="date"
+          value={memoryDate}
+          onChange={(e) => setMemoryDate(e.target.value)}
+          max={new Date().toISOString().split('T')[0]}
+          className="w-full rounded-lg bg-muted border border-border text-sm text-foreground px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary transition-all [color-scheme:dark]"
+        />
+        {memoryDate && (
+          <p className="text-xs text-muted-foreground">
+            {new Date(memoryDate + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
         )}
       </div>
 
@@ -178,7 +201,7 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
       <div className="mt-auto pt-2">
         <motion.button
           type="submit"
-          disabled={!imageUrl || !description.trim()}
+          disabled={!isValid}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.97 }}
           className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:brightness-110 flex items-center justify-center gap-2"
@@ -186,6 +209,11 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
           <Leaf className="w-4 h-4" />
           Plant Memory
         </motion.button>
+        {!isValid && (
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            {!imageUrl ? 'Add an image' : !memoryDate ? 'Pick a date' : 'Add a description'} to continue
+          </p>
+        )}
       </div>
     </motion.form>
   );

@@ -22,6 +22,7 @@ export default function Index() {
       ...data,
       id: crypto.randomUUID(),
       timestamp: new Date(),
+      memoryDate: data.memoryDate,
     };
     setMemories((prev) => [...prev, newMemory]);
     setRecentMemory(newMemory);

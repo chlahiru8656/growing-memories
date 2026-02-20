@@ -1,241 +1,369 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Memory } from '@/types/memory';
+import { Memory, Season, getSeason, getYear } from '@/types/memory';
 import { LeafNode } from './LeafNode';
-import { ALL_BRANCHES, getBranchCount, getLeafPosition } from '@/lib/treeGeometry';
 
 interface MemoryTreeProps {
   memories: Memory[];
 }
 
-// Ground / roots / mist layers
+// ─── Season config ───────────────────────────────────────────────────────────
+const SEASON_CONFIG: Record<Season, { color: string; label: string; emoji: string }> = {
+  Spring: { color: 'hsl(142 55% 55%)', label: 'Spring', emoji: '🌸' },
+  Summer: { color: 'hsl(85 55% 45%)',  label: 'Summer', emoji: '☀️' },
+  Autumn: { color: 'hsl(30 70% 50%)',  label: 'Autumn', emoji: '🍂' },
+  Winter: { color: 'hsl(210 50% 65%)', label: 'Winter', emoji: '❄️' },
+};
+
+const SEASON_ORDER: Season[] = ['Spring', 'Summer', 'Autumn', 'Winter'];
+
+// ─── Geometry helpers ────────────────────────────────────────────────────────
+const SVG_W = 700;
+const SVG_H = 600;
+const TRUNK_X = SVG_W / 2;
+const TRUNK_BOTTOM = SVG_H - 40;
+const TRUNK_TOP = SVG_H - 220;
+
+/** Quadratic bezier point at t */
+function qBezierPoint(
+  x1: number, y1: number,
+  cx: number, cy: number,
+  x2: number, y2: number,
+  t: number
+) {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * x1 + 2 * mt * t * cx + t * t * x2,
+    y: mt * mt * y1 + 2 * mt * t * cy + t * t * y2,
+  };
+}
+
+/** SVG quadratic bezier path string */
+function qPath(x1: number, y1: number, cx: number, cy: number, x2: number, y2: number) {
+  return `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
+}
+
+// ─── Grouped structure ───────────────────────────────────────────────────────
+interface SeasonGroup {
+  season: Season;
+  memories: Memory[];
+}
+interface YearGroup {
+  year: number;
+  seasons: SeasonGroup[];
+  totalMemories: number;
+}
+
+function groupMemories(memories: Memory[]): YearGroup[] {
+  const byYear: Record<number, Record<Season, Memory[]>> = {};
+  for (const m of memories) {
+    const y = getYear(m.memoryDate);
+    const s = getSeason(m.memoryDate);
+    if (!byYear[y]) byYear[y] = { Spring: [], Summer: [], Autumn: [], Winter: [] };
+    byYear[y][s].push(m);
+  }
+  return Object.entries(byYear)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([year, seasons]) => ({
+      year: Number(year),
+      seasons: SEASON_ORDER
+        .filter((s) => seasons[s].length > 0)
+        .map((s) => ({ season: s, memories: seasons[s] })),
+      totalMemories: Object.values(seasons).flat().length,
+    }));
+}
+
+// ─── Forest background ───────────────────────────────────────────────────────
 function ForestBackground() {
   return (
     <g>
-      {/* Deep sky gradient */}
       <defs>
-        <radialGradient id="skyGlow" cx="50%" cy="30%" r="60%">
+        <radialGradient id="skyGlow" cx="50%" cy="30%" r="65%">
           <stop offset="0%" stopColor="hsl(180 20% 12%)" />
           <stop offset="100%" stopColor="hsl(150 18% 6%)" />
         </radialGradient>
-        <radialGradient id="groundGlow" cx="50%" cy="80%" r="50%">
-          <stop offset="0%" stopColor="hsl(120 20% 14%)" />
-          <stop offset="100%" stopColor="hsl(150 18% 7%)" />
-        </radialGradient>
-        <filter id="softBlur">
-          <feGaussianBlur stdDeviation="3" />
+        <filter id="branchBlur">
+          <feGaussianBlur stdDeviation="0.5" />
         </filter>
-        <filter id="leafGlow">
-          <feGaussianBlur stdDeviation="2" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <clipPath id="treeClip">
-          <rect x="0" y="0" width="600" height="540" />
-        </clipPath>
       </defs>
+      <rect width={SVG_W} height={SVG_H} fill="url(#skyGlow)" />
 
-      {/* Background rect */}
-      <rect width="600" height="540" fill="url(#skyGlow)" />
-
-      {/* Atmospheric stars */}
-      {[...Array(30)].map((_, i) => (
+      {/* Stars */}
+      {[...Array(28)].map((_, i) => (
         <motion.circle
           key={i}
-          cx={(i * 83 + 17) % 580 + 10}
-          cy={(i * 61 + 13) % 180 + 10}
-          r={0.8 + (i % 3) * 0.4}
+          cx={(i * 83 + 17) % (SVG_W - 20) + 10}
+          cy={(i * 61 + 13) % 160 + 10}
+          r={0.7 + (i % 3) * 0.4}
           fill="hsl(60 30% 90%)"
           animate={{ opacity: [0.3, 0.9, 0.3] }}
-          transition={{
-            duration: 2 + (i % 4),
-            repeat: Infinity,
-            delay: i * 0.2,
-          }}
+          transition={{ duration: 2 + (i % 4), repeat: Infinity, delay: i * 0.2 }}
         />
       ))}
 
-      {/* Distant tree silhouettes */}
-      {[40, 100, 500, 550, 470, 80].map((tx, i) => (
+      {/* Distant silhouette trees */}
+      {[50, 110, 590, 640, 540, 90].map((tx, i) => (
         <ellipse
           key={i}
-          cx={tx}
-          cy={400 + (i % 2) * 20}
-          rx={12 + (i % 3) * 6}
-          ry={35 + (i % 4) * 12}
-          fill="hsl(140 20% 8%)"
-          opacity={0.6}
+          cx={tx} cy={460 + (i % 2) * 20}
+          rx={12 + (i % 3) * 5} ry={35 + (i % 4) * 12}
+          fill="hsl(140 20% 8%)" opacity={0.55}
         />
       ))}
 
       {/* Ground */}
-      <rect x="0" y="480" width="600" height="60" fill="url(#groundGlow)" />
-      <ellipse cx="300" cy="490" rx="200" ry="25" fill="hsl(120 18% 11%)" opacity="0.8" />
+      <rect x="0" y={SVG_H - 55} width={SVG_W} height={55} fill="hsl(120 18% 9%)" />
+      <ellipse cx={TRUNK_X} cy={SVG_H - 42} rx={160} ry={22} fill="hsl(120 20% 11%)" opacity={0.9} />
 
-      {/* Mist / fog layer */}
+      {/* Mist */}
       <motion.rect
-        x="0" y="460" width="600" height="40"
-        fill="hsl(150 20% 12%)"
-        opacity={0.5}
-        animate={{ opacity: [0.4, 0.6, 0.4] }}
+        x="0" y={SVG_H - 75} width={SVG_W} height={40}
+        fill="hsl(150 20% 12%)" opacity={0.45}
+        animate={{ opacity: [0.35, 0.55, 0.35] }}
         transition={{ duration: 6, repeat: Infinity }}
       />
     </g>
   );
 }
 
-// Animated branch component
-function AnimatedBranch({ path, delay }: { path: string; delay: number }) {
-  return (
-    <motion.path
-      d={path}
-      stroke="hsl(25 40% 26%)"
-      strokeWidth={4}
-      strokeLinecap="round"
-      fill="none"
-      initial={{ pathLength: 0, opacity: 0 }}
-      animate={{ pathLength: 1, opacity: 1 }}
-      transition={{
-        pathLength: { duration: 1.0, ease: 'easeInOut', delay },
-        opacity: { duration: 0.3, delay },
-      }}
-    />
-  );
-}
-
-// Trunk animation (thicker, textured)
-function AnimatedTrunk() {
+// ─── Trunk ────────────────────────────────────────────────────────────────────
+function Trunk() {
   return (
     <g>
-      {/* Shadow trunk */}
+      {/* Shadow */}
       <motion.path
-        d="M 305 520 C 305 520 300 420 305 340"
-        stroke="hsl(25 30% 15%)"
-        strokeWidth={16}
-        strokeLinecap="round"
-        fill="none"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.5, ease: 'easeOut' }}
+        d={`M ${TRUNK_X + 4} ${TRUNK_BOTTOM} C ${TRUNK_X + 4} ${TRUNK_BOTTOM - 60} ${TRUNK_X + 6} ${TRUNK_TOP + 40} ${TRUNK_X + 5} ${TRUNK_TOP}`}
+        stroke="hsl(25 30% 14%)" strokeWidth={18} strokeLinecap="round" fill="none"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 1.4, ease: 'easeOut' }}
       />
-      {/* Main trunk */}
+      {/* Main */}
       <motion.path
-        d="M 300 520 C 300 520 295 420 300 340"
-        stroke="hsl(25 40% 28%)"
-        strokeWidth={12}
-        strokeLinecap="round"
-        fill="none"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.5, ease: 'easeOut' }}
+        d={`M ${TRUNK_X} ${TRUNK_BOTTOM} C ${TRUNK_X} ${TRUNK_BOTTOM - 60} ${TRUNK_X - 2} ${TRUNK_TOP + 40} ${TRUNK_X} ${TRUNK_TOP}`}
+        stroke="hsl(25 40% 27%)" strokeWidth={14} strokeLinecap="round" fill="none"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 1.4, ease: 'easeOut' }}
       />
       {/* Highlight */}
       <motion.path
-        d="M 297 520 C 297 510 294 440 296 360"
-        stroke="hsl(25 35% 36%)"
-        strokeWidth={3}
-        strokeLinecap="round"
-        fill="none"
-        initial={{ pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+        d={`M ${TRUNK_X - 3} ${TRUNK_BOTTOM - 10} C ${TRUNK_X - 3} ${TRUNK_BOTTOM - 50} ${TRUNK_X - 4} ${TRUNK_TOP + 50} ${TRUNK_X - 3} ${TRUNK_TOP + 10}`}
+        stroke="hsl(25 35% 38%)" strokeWidth={3} strokeLinecap="round" fill="none"
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 1.4, ease: 'easeOut', delay: 0.3 }}
       />
     </g>
   );
 }
 
-// Ambient firefly particles
+// ─── Animated branch path ─────────────────────────────────────────────────────
+function BranchPath({
+  d, color, width, delay, opacity = 1,
+}: { d: string; color: string; width: number; delay: number; opacity?: number }) {
+  return (
+    <motion.path
+      d={d}
+      stroke={color}
+      strokeWidth={width}
+      strokeLinecap="round"
+      fill="none"
+      opacity={opacity}
+      initial={{ pathLength: 0, opacity: 0 }}
+      animate={{ pathLength: 1, opacity }}
+      transition={{ pathLength: { duration: 0.9, ease: 'easeInOut', delay }, opacity: { duration: 0.25, delay } }}
+    />
+  );
+}
+
+// ─── Fireflies ────────────────────────────────────────────────────────────────
 function Fireflies({ count }: { count: number }) {
   return (
     <g>
-      {[...Array(Math.min(count * 2, 12))].map((_, i) => (
+      {[...Array(Math.min(count * 2, 14))].map((_, i) => (
         <motion.circle
           key={i}
-          cx={150 + (i * 67) % 320}
-          cy={200 + (i * 41) % 220}
-          r={1.5}
+          cx={160 + (i * 67) % 380}
+          cy={210 + (i * 41) % 250}
+          r={1.4}
           fill="hsl(60 90% 80%)"
           animate={{
-            cx: [150 + (i * 67) % 320, 160 + (i * 73) % 310, 150 + (i * 67) % 320],
-            cy: [200 + (i * 41) % 220, 195 + (i * 37) % 215, 200 + (i * 41) % 220],
-            opacity: [0, 0.8, 0],
-            scale: [0.8, 1.5, 0.8],
+            cx: [160 + (i * 67) % 380, 168 + (i * 73) % 375, 160 + (i * 67) % 380],
+            cy: [210 + (i * 41) % 250, 205 + (i * 37) % 245, 210 + (i * 41) % 250],
+            opacity: [0, 0.85, 0],
           }}
-          transition={{
-            duration: 3 + (i % 3),
-            repeat: Infinity,
-            delay: i * 0.7,
-          }}
+          transition={{ duration: 3 + (i % 3), repeat: Infinity, delay: i * 0.65 }}
         />
       ))}
     </g>
   );
 }
 
+// ─── Main tree component ──────────────────────────────────────────────────────
 export function MemoryTree({ memories }: MemoryTreeProps) {
-  const branchCount = getBranchCount(memories.length);
+  const yearGroups = useMemo(() => groupMemories(memories), [memories]);
 
-  // Visible branches based on memory count
-  const visibleBranches = useMemo(
-    () => ALL_BRANCHES.slice(0, branchCount),
-    [branchCount]
-  );
+  // Layout: years spread left/right of trunk alternately
+  // We compute branch geometry mathematically
+  const yearCount = yearGroups.length;
+
+  // Assign each year a side and vertical level
+  const yearLayouts = useMemo(() => {
+    return yearGroups.map((yg, idx) => {
+      const side = idx % 2 === 0 ? -1 : 1; // -1 left, +1 right
+      // Spread years vertically up the trunk
+      const t = yearCount <= 1 ? 0.5 : idx / (yearCount - 1);
+      const branchY = TRUNK_TOP + 30 + (TRUNK_BOTTOM - TRUNK_TOP - 80) * (1 - t * 0.85);
+      const branchLength = 110 + Math.min(yg.totalMemories * 6, 60);
+      const branchEndX = TRUNK_X + side * branchLength;
+      const branchEndY = branchY - 40;
+      const ctrlX = TRUNK_X + side * branchLength * 0.5;
+      const ctrlY = branchY - 15;
+      return { ...yg, side, branchY, branchEndX, branchEndY, ctrlX, ctrlY, branchLength };
+    });
+  }, [yearGroups, yearCount]);
 
   return (
     <svg
-      viewBox="0 0 600 540"
+      viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       className="w-full h-full"
-      style={{ filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.4))' }}
+      style={{ filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.45))' }}
     >
       <ForestBackground />
+      <Trunk />
 
-      {/* Trunk */}
-      <AnimatedTrunk />
-
-      {/* Branches — revealed progressively */}
+      {/* Year branches + Season sub-branches + leaves */}
       <AnimatePresence>
-        {visibleBranches.slice(1).map((branch, i) => (
-          <AnimatedBranch
-            key={branch.id}
-            path={branch.path}
-            delay={0.1 + i * 0.08}
-          />
-        ))}
-      </AnimatePresence>
+        {yearLayouts.map((yg, yi) => {
+          const yearDelay = 0.4 + yi * 0.25;
+          const yearBranchPath = qPath(TRUNK_X, yg.branchY, yg.ctrlX, yg.ctrlY, yg.branchEndX, yg.branchEndY);
+          const seasonCount = yg.seasons.length;
 
-      {/* Memory leaves */}
-      <AnimatePresence>
-        {memories.map((memory, index) => {
-          const pos = getLeafPosition(index);
           return (
-            <LeafNode
-              key={memory.id}
-              memory={memory}
-              x={pos.x}
-              y={pos.y}
-              index={index}
-            />
+            <g key={yg.year}>
+              {/* ── Year branch ── */}
+              <BranchPath
+                d={yearBranchPath}
+                color="hsl(25 40% 30%)"
+                width={6}
+                delay={yearDelay}
+                opacity={0.95}
+              />
+
+              {/* Year label */}
+              <motion.text
+                x={yg.branchEndX + yg.side * 8}
+                y={yg.branchEndY + 4}
+                textAnchor={yg.side > 0 ? 'start' : 'end'}
+                fill="hsl(60 20% 72%)"
+                fontSize={11}
+                fontFamily="Playfair Display, serif"
+                fontStyle="italic"
+                opacity={0}
+                animate={{ opacity: 0.85 }}
+                transition={{ delay: yearDelay + 0.7, duration: 0.5 }}
+              >
+                {yg.year}
+              </motion.text>
+
+              {/* ── Season sub-branches ── */}
+              {yg.seasons.map((sg, si) => {
+                const cfg = SEASON_CONFIG[sg.season];
+                // Spread seasons along the year branch arc
+                const seasonT = seasonCount === 1 ? 0.6 : 0.3 + (si / (seasonCount - 1)) * 0.55;
+                const origin = qBezierPoint(
+                  TRUNK_X, yg.branchY,
+                  yg.ctrlX, yg.ctrlY,
+                  yg.branchEndX, yg.branchEndY,
+                  seasonT
+                );
+
+                // Season branch goes upward/outward
+                const seasonLength = 55 + sg.memories.length * 10;
+                const angle = yg.side > 0
+                  ? -55 + si * 20 // right side fans up-left to up-right
+                  : -125 + si * 20; // left side mirrors
+                const rad = (angle * Math.PI) / 180;
+                const sEndX = origin.x + Math.cos(rad) * seasonLength;
+                const sEndY = origin.y + Math.sin(rad) * seasonLength;
+                const sCtrlX = origin.x + Math.cos(rad) * seasonLength * 0.5 + yg.side * 12;
+                const sCtrlY = origin.y + Math.sin(rad) * seasonLength * 0.5 - 10;
+                const seasonPath = qPath(origin.x, origin.y, sCtrlX, sCtrlY, sEndX, sEndY);
+                const seasonDelay = yearDelay + 0.5 + si * 0.2;
+
+                // Leaves fan out from season tip
+                const leafCount = sg.memories.length;
+                return (
+                  <g key={sg.season}>
+                    {/* Season branch */}
+                    <BranchPath
+                      d={seasonPath}
+                      color={cfg.color}
+                      width={2.5}
+                      delay={seasonDelay}
+                      opacity={0.75}
+                    />
+
+                    {/* Season label */}
+                    <motion.text
+                      x={sEndX + Math.cos(rad) * 6}
+                      y={sEndY + Math.sin(rad) * 6}
+                      textAnchor="middle"
+                      fill={cfg.color}
+                      fontSize={9}
+                      fontFamily="Inter, sans-serif"
+                      opacity={0}
+                      animate={{ opacity: 0.9 }}
+                      transition={{ delay: seasonDelay + 0.6, duration: 0.4 }}
+                    >
+                      {cfg.emoji} {cfg.label}
+                    </motion.text>
+
+                    {/* Leaves */}
+                    {sg.memories.map((mem, mi) => {
+                      // Fan leaves evenly around season tip
+                      const spreadAngle = Math.min(leafCount * 22, 80);
+                      const leafAngle = leafCount === 1
+                        ? angle - 90
+                        : angle - 90 - spreadAngle / 2 + (mi / (leafCount - 1)) * spreadAngle;
+                      const leafRad = (leafAngle * Math.PI) / 180;
+                      const leafDist = 28 + mi * 6;
+                      const lx = sEndX + Math.cos(leafRad) * leafDist;
+                      const ly = sEndY + Math.sin(leafRad) * leafDist;
+                      const leafRotation = leafAngle + 90;
+                      return (
+                        <LeafNode
+                          key={mem.id}
+                          memory={mem}
+                          x={lx}
+                          y={ly}
+                          index={yi * 20 + si * 4 + mi}
+                          rotation={leafRotation}
+                        />
+                      );
+                    })}
+                  </g>
+                );
+              })}
+            </g>
           );
         })}
       </AnimatePresence>
 
-      {/* Ambient fireflies */}
+      {/* Fireflies */}
       <Fireflies count={memories.length} />
 
-      {/* Empty state hint */}
+      {/* Empty state */}
       {memories.length === 0 && (
         <motion.text
-          x="300"
-          y="480"
+          x={TRUNK_X}
+          y={SVG_H - 65}
           textAnchor="middle"
           fill="hsl(150 8% 50%)"
-          fontSize="12"
+          fontSize={12}
           fontFamily="Inter, sans-serif"
+          fontStyle="italic"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
+          transition={{ delay: 1.6 }}
         >
           Plant your first memory seed...
         </motion.text>
