@@ -8,6 +8,7 @@ interface LeafNodeProps {
   y: number;
   index: number;
   rotation?: number;
+  onClick?: (memory: Memory) => void;
 }
 
 const EMOTION_GLOW: Record<string, string> = {
@@ -19,7 +20,7 @@ const EMOTION_GLOW: Record<string, string> = {
 
 const LEAF_SIZE = 32;
 
-export function LeafNode({ memory, x, y, index, rotation = 0 }: LeafNodeProps) {
+export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNodeProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const glowClass = EMOTION_GLOW[memory.emotion] || EMOTION_GLOW.Normal;
   const isSpecial = memory.emotion === 'Special';
@@ -62,6 +63,7 @@ export function LeafNode({ memory, x, y, index, rotation = 0 }: LeafNodeProps) {
           style={{ width: LEAF_SIZE, height: LEAF_SIZE }}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
+          onClick={() => onClick?.(memory)}
           title={memory.description}
         >
           <img

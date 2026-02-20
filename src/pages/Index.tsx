@@ -4,6 +4,7 @@ import { Trees, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Memory, Emotion } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
 import { MemoryTree } from '@/components/MemoryTree';
+import { MemoryModal } from '@/components/MemoryModal';
 
 const EMOTION_BADGE: Record<string, string> = {
   Happy: 'bg-forest-happy/20 text-forest-happy border-forest-happy/30',
@@ -16,6 +17,7 @@ export default function Index() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [recentMemory, setRecentMemory] = useState<Memory | null>(null);
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
 
   const handlePlant = useCallback((data: Omit<Memory, 'id' | 'timestamp'>) => {
     const newMemory: Memory = {
@@ -89,7 +91,7 @@ export default function Index() {
         {/* Tree canvas */}
         <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
           <div className="w-full h-full max-w-3xl">
-            <MemoryTree memories={memories} />
+            <MemoryTree memories={memories} onLeafClick={setSelectedMemory} />
           </div>
 
           {/* Floating "new memory" toast */}
@@ -140,6 +142,7 @@ export default function Index() {
                     transition={{ delay: i * 0.05, type: 'spring' }}
                     className="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden border-2 border-border hover:border-primary transition-colors cursor-pointer"
                     title={m.description}
+                    onClick={() => setSelectedMemory(m)}
                   >
                     <img src={m.imageUrl} alt={m.description} className="w-full h-full object-cover" />
                   </motion.div>
@@ -149,6 +152,9 @@ export default function Index() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Memory detail modal */}
+      <MemoryModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
     </div>
   );
 }
