@@ -5,6 +5,7 @@ import { LeafNode } from './LeafNode';
 
 interface MemoryTreeProps {
   memories: Memory[];
+  onLeafClick?: (memory: Memory) => void;
 }
 
 // ─── Season config ───────────────────────────────────────────────────────────
@@ -71,6 +72,54 @@ function groupMemories(memories: Memory[]): YearGroup[] {
         .map((s) => ({ season: s, memories: seasons[s] })),
       totalMemories: Object.values(seasons).flat().length,
     }));
+}
+
+// ─── Decorative leaf shape ────────────────────────────────────────────────────
+/** Renders a single small SVG leaf polygon at (x, y) rotated by `angleDeg`. */
+function DecorativeLeaf({
+  x, y, angleDeg, color, size = 7, opacity = 0.55,
+}: { x: number; y: number; angleDeg: number; color: string; size?: number; opacity?: number }) {
+  // A simple teardrop leaf path centered at origin, pointing up
+  const s = size;
+  const path = `M 0 ${-s * 1.6} C ${s * 0.9} ${-s * 0.6} ${s * 0.8} ${s * 0.5} 0 ${s * 0.9} C ${-s * 0.8} ${s * 0.5} ${-s * 0.9} ${-s * 0.6} 0 ${-s * 1.6}`;
+  return (
+    <g
+      transform={`translate(${x}, ${y}) rotate(${angleDeg})`}
+      style={{ pointerEvents: 'none' }}
+      opacity={opacity}
+    >
+      <path d={path} fill={color} />
+    </g>
+  );
+}
+
+/** Distribute N decorative leaves evenly along a quadratic bezier. */
+function DecorativeLeaves({
+  x1, y1, cx, cy, x2, y2,
+  color, count, baseAngle,
+}: {
+  x1: number; y1: number; cx: number; cy: number; x2: number; y2: number;
+  color: string; count: number; baseAngle: number;
+}) {
+  const leaves = [];
+  for (let i = 0; i < count; i++) {
+    const t = (i + 1) / (count + 1);
+    const pt = qBezierPoint(x1, y1, cx, cy, x2, y2, t);
+    // Alternate leaf angle slightly for natural look
+    const wiggle = (i % 2 === 0 ? 25 : -25);
+    leaves.push(
+      <DecorativeLeaf
+        key={i}
+        x={pt.x}
+        y={pt.y}
+        angleDeg={baseAngle + wiggle}
+        color={color}
+        size={6 + (i % 2) * 2}
+        opacity={0.45 + (i % 3) * 0.1}
+      />
+    );
+  }
+  return <>{leaves}</>;
 }
 
 // ─── Forest background ───────────────────────────────────────────────────────
@@ -198,18 +247,14 @@ function Fireflies({ count }: { count: number }) {
 }
 
 // ─── Main tree component ──────────────────────────────────────────────────────
-export function MemoryTree({ memories }: MemoryTreeProps) {
+export function MemoryTree({ memories, onLeafClick }: MemoryTreeProps) {
   const yearGroups = useMemo(() => groupMemories(memories), [memories]);
 
-  // Layout: years spread left/right of trunk alternately
-  // We compute branch geometry mathematically
   const yearCount = yearGroups.length;
 
-  // Assign each year a side and vertical level
   const yearLayouts = useMemo(() => {
     return yearGroups.map((yg, idx) => {
-      const side = idx % 2 === 0 ? -1 : 1; // -1 left, +1 right
-      // Spread years vertically up the trunk
+      const side = idx % 2 === 0 ? -1 : 1;
       const t = yearCount <= 1 ? 0.5 : idx / (yearCount - 1);
       const branchY = TRUNK_TOP + 30 + (TRUNK_BOTTOM - TRUNK_TOP - 80) * (1 - t * 0.85);
       const branchLength = 110 + Math.min(yg.totalMemories * 6, 60);
@@ -236,6 +281,8 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
           const yearDelay = 0.4 + yi * 0.25;
           const yearBranchPath = qPath(TRUNK_X, yg.branchY, yg.ctrlX, yg.ctrlY, yg.branchEndX, yg.branchEndY);
           const seasonCount = yg.seasons.length;
+          // Decorative leaf color along year branch: muted earthy green
+          const yearLeafColor = 'hsl(130 35% 28%)';
 
           return (
             <g key={yg.year}>
@@ -247,6 +294,23 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                 delay={yearDelay}
                 opacity={0.95}
               />
+
+              {/* Decorative leaves along year branch */}
+              <motion.g
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: yearDelay + 0.7, duration: 0.6 }}
+                style={{ pointerEvents: 'none' }}
+              >
+                <DecorativeLeaves
+                  x1={TRUNK_X} y1={yg.branchY}
+                  cx={yg.ctrlX} cy={yg.ctrlY}
+                  x2={yg.branchEndX} y2={yg.branchEndY}
+                  color={yearLeafColor}
+                  count={4}
+                  baseAngle={yg.side > 0 ? -60 : -120}
+                />
+              </motion.g>
 
               {/* Year label */}
               <motion.text
@@ -267,7 +331,6 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
               {/* ── Season sub-branches ── */}
               {yg.seasons.map((sg, si) => {
                 const cfg = SEASON_CONFIG[sg.season];
-                // Spread seasons along the year branch arc
                 const seasonT = seasonCount === 1 ? 0.6 : 0.3 + (si / (seasonCount - 1)) * 0.55;
                 const origin = qBezierPoint(
                   TRUNK_X, yg.branchY,
@@ -276,11 +339,10 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                   seasonT
                 );
 
-                // Season branch goes upward/outward
                 const seasonLength = 55 + sg.memories.length * 10;
                 const angle = yg.side > 0
-                  ? -55 + si * 20 // right side fans up-left to up-right
-                  : -125 + si * 20; // left side mirrors
+                  ? -55 + si * 20
+                  : -125 + si * 20;
                 const rad = (angle * Math.PI) / 180;
                 const sEndX = origin.x + Math.cos(rad) * seasonLength;
                 const sEndY = origin.y + Math.sin(rad) * seasonLength;
@@ -289,8 +351,8 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                 const seasonPath = qPath(origin.x, origin.y, sCtrlX, sCtrlY, sEndX, sEndY);
                 const seasonDelay = yearDelay + 0.5 + si * 0.2;
 
-                // Leaves fan out from season tip
                 const leafCount = sg.memories.length;
+
                 return (
                   <g key={sg.season}>
                     {/* Season branch */}
@@ -301,6 +363,23 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                       delay={seasonDelay}
                       opacity={0.75}
                     />
+
+                    {/* Decorative leaves along season branch */}
+                    <motion.g
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: seasonDelay + 0.5, duration: 0.5 }}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <DecorativeLeaves
+                        x1={origin.x} y1={origin.y}
+                        cx={sCtrlX} cy={sCtrlY}
+                        x2={sEndX} y2={sEndY}
+                        color={cfg.color}
+                        count={3}
+                        baseAngle={angle - 90}
+                      />
+                    </motion.g>
 
                     {/* Season label */}
                     <motion.text
@@ -317,9 +396,8 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                       {cfg.emoji} {cfg.label}
                     </motion.text>
 
-                    {/* Leaves */}
+                    {/* Memory leaves */}
                     {sg.memories.map((mem, mi) => {
-                      // Fan leaves evenly around season tip
                       const spreadAngle = Math.min(leafCount * 22, 80);
                       const leafAngle = leafCount === 1
                         ? angle - 90
@@ -337,6 +415,7 @@ export function MemoryTree({ memories }: MemoryTreeProps) {
                           y={ly}
                           index={yi * 20 + si * 4 + mi}
                           rotation={leafRotation}
+                          onClick={onLeafClick}
                         />
                       );
                     })}
