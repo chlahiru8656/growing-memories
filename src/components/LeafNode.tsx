@@ -7,51 +7,59 @@ interface LeafNodeProps {
   x: number;
   y: number;
   index: number;
+  rotation?: number;
 }
 
-const EMOTION_STYLES: Record<string, string> = {
-  Happy: 'bg-forest-happy shadow-[0_0_15px_rgba(52,211,153,0.6)]',
-  Sad: 'bg-forest-sad [filter:saturate(0.7)]',
-  Special: 'bg-forest-special shadow-[0_0_20px_rgba(245,158,11,0.6)] ring-2 ring-amber-200/40',
-  Normal: 'bg-forest-normal shadow-[0_2px_8px_rgba(0,0,0,0.3)]',
+const EMOTION_GLOW: Record<string, string> = {
+  Happy: 'shadow-[0_0_12px_4px_rgba(52,211,153,0.55)] border-forest-happy/60',
+  Sad: 'shadow-[0_0_10px_3px_rgba(147,197,253,0.4)] border-forest-sad/50 saturate-[0.7]',
+  Special: 'shadow-[0_0_18px_6px_rgba(245,158,11,0.6)] border-forest-special/70 ring-1 ring-amber-200/30',
+  Normal: 'shadow-[0_2px_8px_rgba(0,0,0,0.35)] border-white/20',
 };
 
-export function LeafNode({ memory, x, y, index }: LeafNodeProps) {
+const LEAF_SIZE = 32;
+
+export function LeafNode({ memory, x, y, index, rotation = 0 }: LeafNodeProps) {
   const [showTooltip, setShowTooltip] = useState(false);
-  const emotionClass = EMOTION_STYLES[memory.emotion] || EMOTION_STYLES.Normal;
+  const glowClass = EMOTION_GLOW[memory.emotion] || EMOTION_GLOW.Normal;
   const isSpecial = memory.emotion === 'Special';
 
   return (
     <motion.g
       initial={{ scale: 0, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 200, damping: 18, delay: index * 0.05 }}
+      exit={{ scale: 0, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 200, damping: 18, delay: index * 0.06 }}
       style={{ originX: `${x}px`, originY: `${y}px` }}
     >
-      {/* Glow ring for special */}
+      {/* Pulse ring for special */}
       {isSpecial && (
         <motion.circle
           cx={x}
           cy={y}
           r={22}
           fill="none"
-          stroke="hsl(38 90% 60% / 0.4)"
-          strokeWidth={2}
-          animate={{ r: [20, 26, 20] }}
+          stroke="hsl(38 90% 60% / 0.45)"
+          strokeWidth={1.5}
+          animate={{ r: [18, 26, 18], opacity: [0.8, 0.2, 0.8] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
 
-      {/* Leaf/memory node as foreignObject for rich styling */}
+      {/* Leaf shape via foreignObject */}
       <foreignObject
-        x={x - 18}
-        y={y - 18}
-        width={36}
-        height={36}
+        x={x - LEAF_SIZE / 2}
+        y={y - LEAF_SIZE / 2}
+        width={LEAF_SIZE + 4}
+        height={LEAF_SIZE + 4}
         className="overflow-visible"
+        style={{ transform: `rotate(${rotation}deg)`, transformOrigin: `${x}px ${y}px` }}
       >
         <div
-          className={`w-9 h-9 rounded-full cursor-pointer transition-transform duration-200 hover:scale-125 border-2 border-white/20 overflow-hidden ${emotionClass} ${isSpecial ? 'animate-pulse' : ''}`}
+          className={`cursor-pointer border-2 overflow-hidden transition-transform duration-200 hover:scale-125
+            rounded-tr-[60%] rounded-bl-[60%] rounded-tl-[8px] rounded-br-[8px]
+            aspect-square ${glowClass} ${isSpecial ? 'animate-pulse' : ''}`}
+          style={{ width: LEAF_SIZE, height: LEAF_SIZE }}
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
           title={memory.description}
@@ -64,26 +72,34 @@ export function LeafNode({ memory, x, y, index }: LeafNodeProps) {
         </div>
       </foreignObject>
 
-      {/* Tooltip via foreignObject */}
+      {/* Tooltip */}
       <AnimatePresence>
         {showTooltip && (
           <foreignObject
-            x={x - 80}
-            y={y - 90}
-            width={160}
-            height={80}
+            x={x - 85}
+            y={y - 95}
+            width={170}
+            height={90}
             className="overflow-visible pointer-events-none"
+            style={{ zIndex: 100 }}
           >
             <motion.div
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              transition={{ duration: 0.18 }}
+              transition={{ duration: 0.15 }}
               className="bg-card border border-border rounded-lg px-3 py-2 shadow-xl pointer-events-none"
             >
-              <p className="text-[10px] font-medium text-foreground/80 uppercase tracking-wider mb-0.5">
-                {memory.emotion}
-              </p>
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                  {memory.emotion}
+                </p>
+                {memory.memoryDate && (
+                  <p className="text-[10px] text-muted-foreground/70">
+                    · {new Date(memory.memoryDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
               <p className="text-xs text-foreground line-clamp-2">{memory.description}</p>
             </motion.div>
           </foreignObject>
