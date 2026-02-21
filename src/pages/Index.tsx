@@ -121,7 +121,7 @@ export default function Index() {
                 className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-3 rounded-xl bg-card border border-border shadow-xl backdrop-blur-sm z-20"
               >
                 <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-primary/40 flex-shrink-0">
-                  <img src={recentMemory.imageUrl} alt="" className="w-full h-full object-cover" />
+                  <img src={recentMemory.imageUrls?.[0] || recentMemory.imageUrl} alt="" className="w-full h-full object-cover" />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">New leaf sprouted! 🌱</p>
@@ -159,7 +159,7 @@ export default function Index() {
                     title={m.description}
                     onClick={() => setSelectedMemory(m)}
                   >
-                    <img src={m.imageUrl} alt={m.description} className="w-full h-full object-cover" />
+                    <img src={m.imageUrls?.[0] || m.imageUrl} alt={m.description} className="w-full h-full object-cover" />
                   </motion.div>
                 ))}
               </div>

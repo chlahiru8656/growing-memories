@@ -5,6 +5,8 @@ export type Season = 'Spring' | 'Summer' | 'Autumn' | 'Winter';
 export interface Memory {
   id: string;
   imageUrl: string;
+  imageUrls: string[];
+  isCollection: boolean;
   description: string;
   emotion: Emotion;
   timestamp: Date;
