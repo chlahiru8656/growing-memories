@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Link2 } from 'lucide-react';
 import { Memory } from '@/types/memory';
 
 interface LeafNodeProps {
@@ -24,6 +25,7 @@ export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNod
   const [showTooltip, setShowTooltip] = useState(false);
   const glowClass = EMOTION_GLOW[memory.emotion] || EMOTION_GLOW.Normal;
   const isSpecial = memory.emotion === 'Special';
+  const hasConnections = memory.connections && memory.connections.length > 0;
 
   return (
     <motion.g
@@ -73,6 +75,26 @@ export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNod
           />
         </div>
       </foreignObject>
+
+      {/* Connection badge */}
+      {hasConnections && (
+        <foreignObject
+          x={x + LEAF_SIZE / 2 - 4}
+          y={y - LEAF_SIZE / 2 - 4}
+          width={18}
+          height={18}
+          className="overflow-visible"
+        >
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="w-[16px] h-[16px] rounded-full bg-accent/80 border border-accent/40 flex items-center justify-center"
+            title={`With: ${memory.connections!.join(', ')}`}
+          >
+            <Link2 className="w-[9px] h-[9px] text-accent-foreground" />
+          </motion.div>
+        </foreignObject>
+      )}
 
       {/* Tooltip */}
       <AnimatePresence>

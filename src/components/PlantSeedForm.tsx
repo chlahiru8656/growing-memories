@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Leaf, Image as ImageIcon, X, CalendarDays } from 'lucide-react';
+import { Upload, Leaf, Image as ImageIcon, X, CalendarDays, Users } from 'lucide-react';
 import { Memory, Emotion } from '@/types/memory';
 
 interface PlantSeedFormProps {
   onPlant: (memory: Omit<Memory, 'id' | 'timestamp'>) => void;
+  connections?: string[];
 }
 
 const EMOTIONS: { value: Emotion; label: string }[] = [
@@ -14,12 +15,13 @@ const EMOTIONS: { value: Emotion; label: string }[] = [
   { value: 'Special', label: '⭐ Special' },
 ];
 
-export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
+export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps) {
   const [imageUrl, setImageUrl] = useState<string>('');
   const [imagePreview, setImagePreview] = useState<string>('');
   const [description, setDescription] = useState('');
   const [emotion, setEmotion] = useState<Emotion>('Normal');
   const [memoryDate, setMemoryDate] = useState<string>('');
+  const [taggedConnections, setTaggedConnections] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,15 +50,28 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const toggleConnection = (name: string) => {
+    setTaggedConnections((prev) =>
+      prev.includes(name) ? prev.filter((c) => c !== name) : [...prev, name]
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!imageUrl || !description.trim() || !memoryDate) return;
-    onPlant({ imageUrl, description: description.trim(), emotion, memoryDate });
+    onPlant({
+      imageUrl,
+      description: description.trim(),
+      emotion,
+      memoryDate,
+      connections: taggedConnections.length > 0 ? taggedConnections : undefined,
+    });
     setImageUrl('');
     setImagePreview('');
     setDescription('');
     setEmotion('Normal');
     setMemoryDate('');
+    setTaggedConnections([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -65,7 +80,7 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
   return (
     <motion.form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-5 h-full"
+      className="flex flex-col gap-5 h-full overflow-y-auto"
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -196,6 +211,33 @@ export function PlantSeedForm({ onPlant }: PlantSeedFormProps) {
           ))}
         </div>
       </div>
+
+      {/* Tag Connections */}
+      {connections.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5" />
+            Tag Connections
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {connections.map((c) => (
+              <motion.button
+                key={c}
+                type="button"
+                onClick={() => toggleConnection(c)}
+                whileTap={{ scale: 0.95 }}
+                className={`text-xs py-1.5 px-3 rounded-full border transition-all duration-200 ${
+                  taggedConnections.includes(c)
+                    ? 'border-accent bg-accent/20 text-accent-foreground'
+                    : 'border-border bg-muted/40 text-muted-foreground hover:border-border/80'
+                }`}
+              >
+                {taggedConnections.includes(c) ? '✓ ' : ''}{c}
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Submit */}
       <div className="mt-auto pt-2">

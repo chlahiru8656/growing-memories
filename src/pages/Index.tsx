@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trees, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Memory, Emotion } from '@/types/memory';
+import { Memory, Emotion, UserProfile } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
 import { MemoryTree } from '@/components/MemoryTree';
 import { MemoryModal } from '@/components/MemoryModal';
+import { AuthGate } from '@/components/AuthGate';
 
 const EMOTION_BADGE: Record<string, string> = {
   Happy: 'bg-forest-happy/20 text-forest-happy border-forest-happy/30',
@@ -14,6 +15,7 @@ const EMOTION_BADGE: Record<string, string> = {
 };
 
 export default function Index() {
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [recentMemory, setRecentMemory] = useState<Memory | null>(null);
@@ -24,12 +26,19 @@ export default function Index() {
       ...data,
       id: crypto.randomUUID(),
       timestamp: new Date(),
-      memoryDate: data.memoryDate,
     };
     setMemories((prev) => [...prev, newMemory]);
     setRecentMemory(newMemory);
     setTimeout(() => setRecentMemory(null), 3500);
   }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setMemories((prev) => prev.filter((m) => m.id !== id));
+  }, []);
+
+  if (!user) {
+    return <AuthGate onEnter={setUser} />;
+  }
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -46,7 +55,7 @@ export default function Index() {
             style={{ background: 'var(--gradient-panel)' }}
           >
             <div className="w-[340px] h-full flex flex-col p-6">
-              <PlantSeedForm onPlant={handlePlant} />
+              <PlantSeedForm onPlant={handlePlant} connections={user.connections} />
             </div>
           </motion.aside>
         )}
@@ -65,12 +74,13 @@ export default function Index() {
             </button>
             <div className="flex items-center gap-2">
               <Trees className="w-5 h-5 text-primary" />
-              <h1 className="font-display text-xl text-foreground">Memory Forest</h1>
+              <h1 className="font-display text-xl text-foreground">{user.name}'s Forest</h1>
             </div>
           </div>
 
           {/* Stats */}
           <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">Age {user.age}</span>
             {memories.length > 0 && (
               <motion.div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border"
@@ -91,7 +101,12 @@ export default function Index() {
         {/* Tree canvas */}
         <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
           <div className="w-full h-full max-w-3xl">
-            <MemoryTree memories={memories} onLeafClick={setSelectedMemory} />
+            <MemoryTree
+              memories={memories}
+              onLeafClick={setSelectedMemory}
+              userAge={user.age}
+              userBirthdate={user.birthdate}
+            />
           </div>
 
           {/* Floating "new memory" toast */}
@@ -154,7 +169,11 @@ export default function Index() {
       </main>
 
       {/* Memory detail modal */}
-      <MemoryModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
+      <MemoryModal
+        memory={selectedMemory}
+        onClose={() => setSelectedMemory(null)}
+        onDelete={handleDelete}
+      />
     </div>
   );
 }
