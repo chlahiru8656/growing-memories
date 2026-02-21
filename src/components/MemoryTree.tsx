@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Memory, Season, getSeason, getYear } from '@/types/memory';
+import { Memory, Season, getSeason, getYear, isBirthdayToday, isTreeHealthy } from '@/types/memory';
 import { LeafNode } from './LeafNode';
 
 interface MemoryTreeProps {
   memories: Memory[];
   onLeafClick?: (memory: Memory) => void;
+  userAge?: number;
+  userBirthdate?: string;
 }
 
 // ─── Season config ───────────────────────────────────────────────────────────
@@ -120,6 +122,65 @@ function DecorativeLeaves({
     );
   }
   return <>{leaves}</>;
+}
+
+// ─── Base canopy (age-scaled silhouette) ─────────────────────────────────────
+function BaseCanopy({ age }: { age: number }) {
+  // Scale canopy based on age: young tree = small, older = fuller
+  const scale = Math.min(0.5 + age * 0.025, 1.3);
+  const opacity = Math.min(0.15 + age * 0.005, 0.35);
+  return (
+    <motion.g
+      initial={{ scale: 0.3, opacity: 0 }}
+      animate={{ scale, opacity }}
+      transition={{ duration: 1.8, ease: 'easeOut' }}
+      style={{ transformOrigin: `${TRUNK_X}px ${TRUNK_TOP + 30}px` }}
+    >
+      {/* Main canopy ellipse */}
+      <ellipse cx={TRUNK_X} cy={TRUNK_TOP - 10} rx={120 * scale} ry={90 * scale}
+        fill="hsl(140 30% 18%)" opacity={0.6} />
+      <ellipse cx={TRUNK_X - 50} cy={TRUNK_TOP + 20} rx={80 * scale} ry={65 * scale}
+        fill="hsl(135 25% 15%)" opacity={0.5} />
+      <ellipse cx={TRUNK_X + 55} cy={TRUNK_TOP + 15} rx={85 * scale} ry={70 * scale}
+        fill="hsl(145 28% 16%)" opacity={0.5} />
+      <ellipse cx={TRUNK_X} cy={TRUNK_TOP + 50} rx={100 * scale} ry={55 * scale}
+        fill="hsl(130 22% 14%)" opacity={0.4} />
+    </motion.g>
+  );
+}
+
+// ─── Birthday celebration blooms ──────────────────────────────────────────────
+function BirthdayBlooms() {
+  return (
+    <g>
+      {[...Array(24)].map((_, i) => {
+        const angle = (i / 24) * Math.PI * 2;
+        const radius = 80 + (i % 3) * 50;
+        const cx = TRUNK_X + Math.cos(angle) * radius;
+        const cy = TRUNK_TOP + 20 + Math.sin(angle) * radius * 0.7;
+        return (
+          <motion.circle
+            key={`bloom-${i}`}
+            cx={cx}
+            cy={cy}
+            r={2 + (i % 3)}
+            fill={i % 3 === 0 ? 'hsl(330 70% 75%)' : i % 3 === 1 ? 'hsl(45 90% 75%)' : 'hsl(280 60% 75%)'}
+            animate={{
+              opacity: [0, 1, 0],
+              scale: [0.3, 1.5, 0.3],
+              cy: [cy, cy - 30 - (i % 4) * 10, cy - 60],
+            }}
+            transition={{
+              duration: 2.5 + (i % 3),
+              repeat: Infinity,
+              delay: i * 0.15,
+              ease: 'easeOut',
+            }}
+          />
+        );
+      })}
+    </g>
+  );
 }
 
 // ─── Forest background ───────────────────────────────────────────────────────
@@ -247,8 +308,10 @@ function Fireflies({ count }: { count: number }) {
 }
 
 // ─── Main tree component ──────────────────────────────────────────────────────
-export function MemoryTree({ memories, onLeafClick }: MemoryTreeProps) {
+export function MemoryTree({ memories, onLeafClick, userAge = 0, userBirthdate }: MemoryTreeProps) {
   const yearGroups = useMemo(() => groupMemories(memories), [memories]);
+  const showBirthday = userBirthdate ? isBirthdayToday(userBirthdate) : false;
+  const healthy = isTreeHealthy(memories);
 
   const yearCount = yearGroups.length;
 
@@ -266,14 +329,19 @@ export function MemoryTree({ memories, onLeafClick }: MemoryTreeProps) {
     });
   }, [yearGroups, yearCount]);
 
+  // Tree health filter
+  const healthFilter = healthy ? 'none' : 'sepia(0.3) saturate(0.5)';
+
   return (
     <svg
       viewBox={`0 0 ${SVG_W} ${SVG_H}`}
       className="w-full h-full"
-      style={{ filter: 'drop-shadow(0 20px 50px rgba(0,0,0,0.45))' }}
+      style={{ filter: `drop-shadow(0 20px 50px rgba(0,0,0,0.45)) ${healthFilter}` }}
     >
       <ForestBackground />
+      {userAge > 0 && <BaseCanopy age={userAge} />}
       <Trunk />
+      {showBirthday && <BirthdayBlooms />}
 
       {/* Year branches + Season sub-branches + leaves */}
       <AnimatePresence>

@@ -1,10 +1,11 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { Memory } from '@/types/memory';
 
 interface MemoryModalProps {
   memory: Memory | null;
   onClose: () => void;
+  onDelete?: (id: string) => void;
 }
 
 const EMOTION_BADGE: Record<string, string> = {
@@ -18,12 +19,19 @@ const EMOTION_EMOJI: Record<string, string> = {
   Happy: '✨', Sad: '💧', Special: '⭐', Normal: '🌿',
 };
 
-export function MemoryModal({ memory, onClose }: MemoryModalProps) {
+export function MemoryModal({ memory, onClose, onDelete }: MemoryModalProps) {
   const formattedDate = memory?.memoryDate
     ? new Date(memory.memoryDate + 'T00:00:00').toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric',
       })
     : '';
+
+  const handleDelete = () => {
+    if (memory && onDelete) {
+      onDelete(memory.id);
+      onClose();
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -71,12 +79,11 @@ export function MemoryModal({ memory, onClose }: MemoryModalProps) {
                   alt={memory.description}
                   className="w-full h-full object-cover"
                 />
-                {/* gradient overlay at bottom of image */}
                 <div className="absolute inset-x-0 top-[calc(75%-2rem)] h-16 bg-gradient-to-b from-transparent to-[hsl(150_18%_10%/0.92)] pointer-events-none" />
               </div>
 
               {/* Content */}
-              <div className="px-5 pb-6 pt-4 flex flex-col gap-3">
+              <div className="px-5 pb-5 pt-4 flex flex-col gap-3">
                 {/* Badges row */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${EMOTION_BADGE[memory.emotion] ?? EMOTION_BADGE.Normal}`}>
@@ -89,10 +96,35 @@ export function MemoryModal({ memory, onClose }: MemoryModalProps) {
                   )}
                 </div>
 
+                {/* Connections */}
+                {memory.connections && memory.connections.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-muted-foreground">With:</span>
+                    {memory.connections.map((c) => (
+                      <span key={c} className="text-xs px-2 py-0.5 rounded-full bg-accent/15 text-accent-foreground border border-accent/20">
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Description */}
                 <p className="text-sm text-foreground/90 leading-relaxed font-body">
                   {memory.description}
                 </p>
+
+                {/* Delete button */}
+                {onDelete && (
+                  <motion.button
+                    onClick={handleDelete}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="mt-1 w-full py-2.5 rounded-xl bg-destructive/15 text-destructive border border-destructive/25 hover:bg-destructive/25 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Memory
+                  </motion.button>
+                )}
               </div>
             </div>
           </motion.div>
