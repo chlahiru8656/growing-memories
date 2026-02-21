@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, Leaf, Image as ImageIcon, X, CalendarDays, Users } from 'lucide-react';
 import { Memory, Emotion } from '@/types/memory';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 interface PlantSeedFormProps {
   onPlant: (memory: Omit<Memory, 'id' | 'timestamp'>) => void;
@@ -16,8 +17,8 @@ const EMOTIONS: { value: Emotion; label: string }[] = [
 ];
 
 export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps) {
-  const [imageUrl, setImageUrl] = useState<string>('');
-  const [imagePreview, setImagePreview] = useState<string>('');
+  const [isCollection, setIsCollection] = useState(false);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [emotion, setEmotion] = useState<Emotion>('Normal');
   const [memoryDate, setMemoryDate] = useState<string>('');
@@ -25,28 +26,36 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    const url = URL.createObjectURL(file);
-    setImageUrl(url);
-    setImagePreview(url);
+  const handleFiles = (files: FileList) => {
+    const newUrls: string[] = [];
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      newUrls.push(URL.createObjectURL(file));
+    });
+    if (isCollection) {
+      setImageUrls((prev) => [...prev, ...newUrls]);
+    } else {
+      setImageUrls(newUrls.slice(0, 1));
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (e.target.files) handleFiles(e.target.files);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
   };
 
-  const clearImage = () => {
-    setImageUrl('');
-    setImagePreview('');
+  const removeImage = (index: number) => {
+    setImageUrls((prev) => prev.filter((_, i) => i !== index));
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const clearAllImages = () => {
+    setImageUrls([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -58,16 +67,17 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!imageUrl || !description.trim() || !memoryDate) return;
+    if (imageUrls.length === 0 || !description.trim() || !memoryDate) return;
     onPlant({
-      imageUrl,
+      imageUrl: imageUrls[0],
+      imageUrls,
+      isCollection: isCollection && imageUrls.length > 1,
       description: description.trim(),
       emotion,
       memoryDate,
       connections: taggedConnections.length > 0 ? taggedConnections : undefined,
     });
-    setImageUrl('');
-    setImagePreview('');
+    setImageUrls([]);
     setDescription('');
     setEmotion('Normal');
     setMemoryDate('');
@@ -75,7 +85,7 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const isValid = !!imageUrl && !!description.trim() && !!memoryDate;
+  const isValid = imageUrls.length > 0 && !!description.trim() && !!memoryDate;
 
   return (
     <motion.form
@@ -96,12 +106,46 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
         </div>
       </div>
 
+      {/* Upload Mode Toggle */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Memory Type
+        </label>
+        <ToggleGroup
+          type="single"
+          value={isCollection ? 'collection' : 'single'}
+          onValueChange={(v) => {
+            if (v) {
+              const next = v === 'collection';
+              setIsCollection(next);
+              if (!next && imageUrls.length > 1) {
+                setImageUrls(imageUrls.slice(0, 1));
+              }
+            }
+          }}
+          className="w-full grid grid-cols-2 gap-0 bg-muted rounded-lg p-1 border border-border"
+        >
+          <ToggleGroupItem
+            value="single"
+            className="text-xs py-2 rounded-md data-[state=on]:bg-primary/20 data-[state=on]:text-primary data-[state=on]:shadow-sm transition-all"
+          >
+            🍃 Single Leaf
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="collection"
+            className="text-xs py-2 rounded-md data-[state=on]:bg-primary/20 data-[state=on]:text-primary data-[state=on]:shadow-sm transition-all"
+          >
+            🌿 Vine Collection
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </div>
+
       {/* Image Upload */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          Memory Image
+          {isCollection ? 'Collection Images' : 'Memory Image'}
         </label>
-        {!imagePreview ? (
+        {imageUrls.length === 0 ? (
           <motion.div
             className={`relative border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors duration-200 ${
               isDragging ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/60 hover:bg-muted/30'
@@ -117,6 +161,7 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple={isCollection}
               className="hidden"
               onChange={handleFileChange}
             />
@@ -125,32 +170,71 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
                 <Upload className="w-5 h-5 text-muted-foreground" />
               </div>
               <p className="text-sm text-muted-foreground">
-                Drop an image or <span className="text-primary">browse</span>
+                Drop {isCollection ? 'images' : 'an image'} or <span className="text-primary">browse</span>
               </p>
-              <p className="text-xs text-muted-foreground/60">JPG, PNG, GIF up to 20MB</p>
+              <p className="text-xs text-muted-foreground/60">
+                {isCollection ? 'Select multiple images for a vine' : 'JPG, PNG, GIF up to 20MB'}
+              </p>
             </div>
           </motion.div>
         ) : (
-          <motion.div
-            className="relative rounded-xl overflow-hidden border border-border"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-          >
-            <img src={imagePreview} alt="Preview" className="w-full h-32 object-cover" />
-            <button
-              type="button"
-              onClick={clearImage}
-              className="absolute top-2 right-2 p-1.5 rounded-full bg-background/80 hover:bg-background border border-border transition-colors"
-            >
-              <X className="w-3.5 h-3.5 text-foreground" />
-            </button>
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background/60 to-transparent flex items-end px-2 pb-1">
+          <div className="flex flex-col gap-2">
+            <div className={`grid ${imageUrls.length === 1 ? 'grid-cols-1' : 'grid-cols-3'} gap-2`}>
+              {imageUrls.map((url, i) => (
+                <motion.div
+                  key={i}
+                  className="relative rounded-xl overflow-hidden border border-border aspect-square"
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <img src={url} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="absolute top-1 right-1 p-1 rounded-full bg-background/80 hover:bg-background border border-border transition-colors"
+                  >
+                    <X className="w-3 h-3 text-foreground" />
+                  </button>
+                </motion.div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
                 <ImageIcon className="w-3 h-3 text-foreground/70" />
-                <span className="text-xs text-foreground/70">Image ready</span>
+                <span className="text-xs text-foreground/70">
+                  {imageUrls.length} image{imageUrls.length > 1 ? 's' : ''} ready
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {isCollection && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    + Add more
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={clearAllImages}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Clear all
+                </button>
               </div>
             </div>
-          </motion.div>
+            {/* Hidden file input for "Add more" */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple={isCollection}
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
         )}
       </div>
 
@@ -249,11 +333,11 @@ export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps)
           className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:brightness-110 flex items-center justify-center gap-2"
         >
           <Leaf className="w-4 h-4" />
-          Plant Memory
+          {isCollection ? 'Plant Vine Collection' : 'Plant Memory'}
         </motion.button>
         {!isValid && (
           <p className="text-xs text-muted-foreground text-center mt-2">
-            {!imageUrl ? 'Add an image' : !memoryDate ? 'Pick a date' : 'Add a description'} to continue
+            {imageUrls.length === 0 ? 'Add an image' : !memoryDate ? 'Pick a date' : 'Add a description'} to continue
           </p>
         )}
       </div>

@@ -9,7 +9,7 @@ interface LeafNodeProps {
   y: number;
   index: number;
   rotation?: number;
-  onClick?: (memory: Memory) => void;
+  onClick?: (memory: Memory) => void | (() => void);
 }
 
 const EMOTION_GLOW: Record<string, string> = {

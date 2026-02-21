@@ -236,6 +236,36 @@ function ForestBackground() {
   );
 }
 
+// ─── Tree Head Sprout (දළු) ───────────────────────────────────────────────────
+function TreeSprout() {
+  const cx = TRUNK_X;
+  const cy = TRUNK_TOP - 4;
+  const leafPath = (angle: number, len: number) => {
+    const rad = (angle * Math.PI) / 180;
+    const ex = cx + Math.cos(rad) * len;
+    const ey = cy + Math.sin(rad) * len;
+    const cpx = cx + Math.cos(rad) * len * 0.5 + Math.cos(rad + Math.PI / 2) * 6;
+    const cpy = cy + Math.sin(rad) * len * 0.5 + Math.sin(rad + Math.PI / 2) * 6;
+    return `M ${cx} ${cy} Q ${cpx} ${cpy} ${ex} ${ey}`;
+  };
+  return (
+    <motion.g
+      animate={{ scale: [0.96, 1.05, 0.96] }}
+      transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
+      style={{ transformOrigin: `${cx}px ${cy}px` }}
+    >
+      {/* Center leaf */}
+      <DecorativeLeaf x={cx} y={cy - 14} angleDeg={0} color="hsl(130 55% 42%)" size={9} opacity={0.9} />
+      {/* Left leaf */}
+      <path d={leafPath(-130, 16)} stroke="hsl(130 45% 35%)" strokeWidth={1.5} fill="none" />
+      <DecorativeLeaf x={cx - 10} y={cy - 10} angleDeg={-35} color="hsl(140 50% 38%)" size={8} opacity={0.85} />
+      {/* Right leaf */}
+      <path d={leafPath(-50, 16)} stroke="hsl(130 45% 35%)" strokeWidth={1.5} fill="none" />
+      <DecorativeLeaf x={cx + 10} y={cy - 10} angleDeg={35} color="hsl(135 50% 40%)" size={8} opacity={0.85} />
+    </motion.g>
+  );
+}
+
 // ─── Trunk ────────────────────────────────────────────────────────────────────
 function Trunk() {
   return (
@@ -341,6 +371,7 @@ export function MemoryTree({ memories, onLeafClick, userAge = 0, userBirthdate }
       <ForestBackground />
       {userAge > 0 && <BaseCanopy age={userAge} />}
       <Trunk />
+      <TreeSprout />
       {showBirthday && <BirthdayBlooms />}
 
       {/* Year branches + Season sub-branches + leaves */}
@@ -464,8 +495,67 @@ export function MemoryTree({ memories, onLeafClick, userAge = 0, userBirthdate }
                       {cfg.emoji} {cfg.label}
                     </motion.text>
 
-                    {/* Memory leaves */}
+                    {/* Memory leaves — single vs collection (vine) */}
                     {sg.memories.map((mem, mi) => {
+                      if (mem.isCollection && mem.imageUrls.length > 1) {
+                        // ── Vine visualization ──
+                        const vineStartX = sEndX;
+                        const vineStartY = sEndY;
+                        const vineLength = 30 + mem.imageUrls.length * 22;
+                        const vineEndX = vineStartX + (yg.side > 0 ? 8 : -8);
+                        const vineEndY = vineStartY + vineLength;
+                        const vineCX = vineStartX + yg.side * 18;
+                        const vineCY = vineStartY + vineLength * 0.5;
+                        const vinePath = qPath(vineStartX, vineStartY, vineCX, vineCY, vineEndX, vineEndY);
+
+                        return (
+                          <g key={mem.id}>
+                            {/* Vine path */}
+                            <BranchPath
+                              d={vinePath}
+                              color="hsl(130 40% 45%)"
+                              width={1.5}
+                              delay={seasonDelay + 0.4 + mi * 0.1}
+                              opacity={0.6}
+                            />
+                            {/* Decorative tendrils */}
+                            <motion.g
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: seasonDelay + 0.8, duration: 0.5 }}
+                              style={{ pointerEvents: 'none' }}
+                            >
+                              <DecorativeLeaves
+                                x1={vineStartX} y1={vineStartY}
+                                cx={vineCX} cy={vineCY}
+                                x2={vineEndX} y2={vineEndY}
+                                color="hsl(130 35% 40%)"
+                                count={Math.min(mem.imageUrls.length, 5)}
+                                baseAngle={yg.side > 0 ? 30 : 150}
+                              />
+                            </motion.g>
+                            {/* Leaf nodes for each image */}
+                            {mem.imageUrls.map((imgUrl, imgIdx) => {
+                              const t = (imgIdx + 1) / (mem.imageUrls.length + 1);
+                              const pt = qBezierPoint(vineStartX, vineStartY, vineCX, vineCY, vineEndX, vineEndY, t);
+                              const vineLeafMem = { ...mem, imageUrl: imgUrl };
+                              return (
+                                <LeafNode
+                                  key={`${mem.id}-vine-${imgIdx}`}
+                                  memory={vineLeafMem}
+                                  x={pt.x + (imgIdx % 2 === 0 ? -8 : 8)}
+                                  y={pt.y}
+                                  index={yi * 20 + si * 4 + mi * 10 + imgIdx}
+                                  rotation={imgIdx % 2 === 0 ? -15 : 15}
+                                  onClick={() => onLeafClick?.(mem)}
+                                />
+                              );
+                            })}
+                          </g>
+                        );
+                      }
+
+                      // ── Standard single leaf ──
                       const spreadAngle = Math.min(leafCount * 22, 80);
                       const leafAngle = leafCount === 1
                         ? angle - 90
