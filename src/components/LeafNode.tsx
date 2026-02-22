@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link2 } from 'lucide-react';
 import { Memory } from '@/types/memory';
 
 interface LeafNodeProps {
@@ -10,6 +9,7 @@ interface LeafNodeProps {
   index: number;
   rotation?: number;
   onClick?: (memory: Memory) => void | (() => void);
+  isVineLeaf?: boolean;
 }
 
 const EMOTION_GLOW: Record<string, string> = {
@@ -19,13 +19,22 @@ const EMOTION_GLOW: Record<string, string> = {
   Normal: 'shadow-[0_2px_8px_rgba(0,0,0,0.35)] border-white/20',
 };
 
-const LEAF_SIZE = 32;
+const CONNECTION_COLORS = [
+  'hsl(160 40% 45%)',
+  'hsl(200 45% 50%)',
+  'hsl(280 40% 55%)',
+  'hsl(30 50% 50%)',
+  'hsl(340 40% 50%)',
+];
 
-export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNodeProps) {
+export function LeafNode({ memory, x, y, index, rotation = 0, onClick, isVineLeaf = false }: LeafNodeProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const glowClass = EMOTION_GLOW[memory.emotion] || EMOTION_GLOW.Normal;
   const isSpecial = memory.emotion === 'Special';
   const hasConnections = memory.connections && memory.connections.length > 0;
+
+  const LEAF_SIZE = isVineLeaf ? 22 : 32;
+  const borderWidth = isVineLeaf ? 'border' : 'border-2';
 
   return (
     <motion.g
@@ -40,11 +49,11 @@ export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNod
         <motion.circle
           cx={x}
           cy={y}
-          r={22}
+          r={isVineLeaf ? 16 : 22}
           fill="none"
           stroke="hsl(38 90% 60% / 0.45)"
           strokeWidth={1.5}
-          animate={{ r: [18, 26, 18], opacity: [0.8, 0.2, 0.8] }}
+          animate={{ r: [isVineLeaf ? 14 : 18, isVineLeaf ? 20 : 26, isVineLeaf ? 14 : 18], opacity: [0.8, 0.2, 0.8] }}
           transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
@@ -59,7 +68,7 @@ export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNod
         style={{ transform: `rotate(${rotation}deg)`, transformOrigin: `${x}px ${y}px` }}
       >
         <div
-          className={`cursor-pointer border-2 overflow-hidden transition-transform duration-200 hover:scale-125
+          className={`cursor-pointer ${borderWidth} overflow-hidden transition-transform duration-200 hover:scale-125
             rounded-tr-[60%] rounded-bl-[60%] rounded-tl-[8px] rounded-br-[8px]
             aspect-square ${glowClass} ${isSpecial ? 'animate-pulse' : ''}`}
           style={{ width: LEAF_SIZE, height: LEAF_SIZE }}
@@ -76,23 +85,50 @@ export function LeafNode({ memory, x, y, index, rotation = 0, onClick }: LeafNod
         </div>
       </foreignObject>
 
-      {/* Connection badge */}
+      {/* Connection avatar badges */}
       {hasConnections && (
         <foreignObject
-          x={x + LEAF_SIZE / 2 - 4}
-          y={y - LEAF_SIZE / 2 - 4}
-          width={18}
-          height={18}
+          x={x + LEAF_SIZE / 2 - 6}
+          y={y - LEAF_SIZE / 2 - 6}
+          width={Math.min(memory.connections!.length, 3) * 14 + 6}
+          height={22}
           className="overflow-visible"
         >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="w-[16px] h-[16px] rounded-full bg-accent/80 border border-accent/40 flex items-center justify-center"
-            title={`With: ${memory.connections!.join(', ')}`}
-          >
-            <Link2 className="w-[9px] h-[9px] text-accent-foreground" />
-          </motion.div>
+          <div className="flex flex-row -space-x-1.5">
+            {memory.connections!.slice(0, 3).map((name, i) => (
+              <div
+                key={name}
+                className="flex items-center justify-center rounded-full border border-white/20"
+                style={{
+                  width: isVineLeaf ? 14 : 18,
+                  height: isVineLeaf ? 14 : 18,
+                  backgroundColor: CONNECTION_COLORS[i % CONNECTION_COLORS.length],
+                  fontSize: isVineLeaf ? 7 : 8,
+                  fontWeight: 600,
+                  color: 'white',
+                  zIndex: 10 - i,
+                }}
+                title={name}
+              >
+                {name.charAt(0).toUpperCase()}
+              </div>
+            ))}
+            {memory.connections!.length > 3 && (
+              <div
+                className="flex items-center justify-center rounded-full border border-white/20"
+                style={{
+                  width: isVineLeaf ? 14 : 18,
+                  height: isVineLeaf ? 14 : 18,
+                  backgroundColor: 'hsl(0 0% 30%)',
+                  fontSize: isVineLeaf ? 6 : 7,
+                  fontWeight: 600,
+                  color: 'white',
+                }}
+              >
+                +{memory.connections!.length - 3}
+              </div>
+            )}
+          </div>
         </foreignObject>
       )}
 

@@ -236,62 +236,123 @@ function ForestBackground() {
   );
 }
 
-// ─── Tree Head Sprout (දළු) ───────────────────────────────────────────────────
+// ─── SVG Defs for realistic trunk & sprout ────────────────────────────────────
+function TreeDefs() {
+  return (
+    <defs>
+      <linearGradient id="trunkGrad" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="hsl(25 45% 18%)" />
+        <stop offset="30%" stopColor="hsl(25 40% 25%)" />
+        <stop offset="60%" stopColor="hsl(30 35% 30%)" />
+        <stop offset="85%" stopColor="hsl(90 30% 32%)" />
+        <stop offset="100%" stopColor="hsl(120 40% 35%)" />
+      </linearGradient>
+      <linearGradient id="trunkHighlight" x1="0" y1="1" x2="0" y2="0">
+        <stop offset="0%" stopColor="hsl(25 35% 28%)" />
+        <stop offset="50%" stopColor="hsl(30 30% 38%)" />
+        <stop offset="100%" stopColor="hsl(110 35% 45%)" />
+      </linearGradient>
+      <linearGradient id="sproutLeafGrad" x1="0.5" y1="1" x2="0.5" y2="0">
+        <stop offset="0%" stopColor="hsl(130 50% 30%)" />
+        <stop offset="50%" stopColor="hsl(125 55% 42%)" />
+        <stop offset="100%" stopColor="hsl(115 60% 52%)" />
+      </linearGradient>
+      <linearGradient id="sproutLeafGrad2" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stopColor="hsl(135 45% 28%)" />
+        <stop offset="100%" stopColor="hsl(120 55% 48%)" />
+      </linearGradient>
+      <linearGradient id="veinGrad" x1="0.5" y1="0" x2="0.5" y2="1">
+        <stop offset="0%" stopColor="hsl(110 50% 60%)" stopOpacity="0.7" />
+        <stop offset="100%" stopColor="hsl(120 40% 45%)" stopOpacity="0.2" />
+      </linearGradient>
+      <filter id="leafGlow" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="2" result="blur" />
+        <feFlood floodColor="hsl(120 60% 55%)" floodOpacity="0.35" result="color" />
+        <feComposite in="color" in2="blur" operator="in" result="glow" />
+        <feMerge>
+          <feMergeNode in="glow" />
+          <feMergeNode in="SourceGraphic" />
+        </feMerge>
+      </filter>
+      <filter id="barkTexture">
+        <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise" />
+        <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.5" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+    </defs>
+  );
+}
+
+// ─── Realistic Trunk ──────────────────────────────────────────────────────────
+function Trunk() {
+  const bx = TRUNK_X;
+  const by = TRUNK_BOTTOM;
+  const ty = TRUNK_TOP;
+  const trunkFill = `M ${bx - 7} ${by} C ${bx - 8} ${by - 50}, ${bx - 5} ${ty + 80}, ${bx - 3} ${ty + 10} C ${bx - 2} ${ty + 2}, ${bx - 1} ${ty - 2}, ${bx} ${ty - 6} C ${bx + 1} ${ty - 1}, ${bx + 2} ${ty + 4}, ${bx + 3} ${ty + 12} C ${bx + 6} ${ty + 75}, ${bx + 9} ${by - 55}, ${bx + 7} ${by} Z`;
+  const trunkLeft = `M ${bx - 7} ${by} C ${bx - 8} ${by - 50}, ${bx - 5} ${ty + 80}, ${bx - 3} ${ty + 10}`;
+
+  return (
+    <g>
+      <motion.path d={trunkFill} fill="hsl(25 30% 10%)" opacity={0.4} transform="translate(3,2)"
+        initial={{ opacity: 0 }} animate={{ opacity: 0.4 }} transition={{ duration: 1.2 }} />
+      <motion.path d={trunkFill} fill="url(#trunkGrad)" filter="url(#barkTexture)"
+        initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }}
+        transition={{ duration: 1.4, ease: 'easeOut' }} style={{ transformOrigin: `${bx}px ${by}px` }} />
+      <motion.path d={trunkLeft} stroke="hsl(25 35% 15%)" strokeWidth={1} fill="none" opacity={0.5}
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.4, ease: 'easeOut' }} />
+      <motion.path
+        d={`M ${bx + 2} ${by - 15} C ${bx + 3} ${by - 50}, ${bx + 2} ${ty + 70}, ${bx + 1} ${ty + 15}`}
+        stroke="url(#trunkHighlight)" strokeWidth={2.5} strokeLinecap="round" fill="none" opacity={0.45}
+        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.4, ease: 'easeOut', delay: 0.3 }} />
+      {[0.3, 0.55, 0.75].map((t, i) => (
+        <ellipse key={i} cx={bx + (i % 2 === 0 ? -2 : 3)} cy={by + (ty - by) * t}
+          rx={2.5} ry={1.5} fill="hsl(25 30% 18%)" opacity={0.35} />
+      ))}
+    </g>
+  );
+}
+
+// ─── Realistic Sprout (දළු) ───────────────────────────────────────────────────
 function TreeSprout() {
   const cx = TRUNK_X;
-  const cy = TRUNK_TOP - 4;
-  const leafPath = (angle: number, len: number) => {
+  const cy = TRUNK_TOP - 6;
+
+  const realisticLeaf = (tipX: number, tipY: number, angle: number, size: number, gradId: string) => {
     const rad = (angle * Math.PI) / 180;
-    const ex = cx + Math.cos(rad) * len;
-    const ey = cy + Math.sin(rad) * len;
-    const cpx = cx + Math.cos(rad) * len * 0.5 + Math.cos(rad + Math.PI / 2) * 6;
-    const cpy = cy + Math.sin(rad) * len * 0.5 + Math.sin(rad + Math.PI / 2) * 6;
-    return `M ${cx} ${cy} Q ${cpx} ${cpy} ${ex} ${ey}`;
+    const perpRad = rad + Math.PI / 2;
+    const s = size;
+    const tx = cx + Math.cos(rad) * s * 1.8 + tipX;
+    const ty2 = cy + Math.sin(rad) * s * 1.8 + tipY;
+    const cp1x = cx + Math.cos(rad) * s * 0.6 + Math.cos(perpRad) * s * 0.45 + tipX;
+    const cp1y = cy + Math.sin(rad) * s * 0.6 + Math.sin(perpRad) * s * 0.45 + tipY;
+    const cp2x = cx + Math.cos(rad) * s * 0.6 - Math.cos(perpRad) * s * 0.45 + tipX;
+    const cp2y = cy + Math.sin(rad) * s * 0.6 - Math.sin(perpRad) * s * 0.45 + tipY;
+    const veinEnd = { x: cx + Math.cos(rad) * s * 1.5 + tipX, y: cy + Math.sin(rad) * s * 1.5 + tipY };
+
+    return (
+      <g key={`leaf-${angle}-${tipX}`}>
+        <path
+          d={`M ${cx + tipX} ${cy + tipY} C ${cp1x} ${cp1y}, ${tx + Math.cos(perpRad) * 2} ${ty2 + Math.sin(perpRad) * 2}, ${tx} ${ty2} C ${tx - Math.cos(perpRad) * 2} ${ty2 - Math.sin(perpRad) * 2}, ${cp2x} ${cp2y}, ${cx + tipX} ${cy + tipY}`}
+          fill={`url(#${gradId})`}
+          filter="url(#leafGlow)"
+        />
+        <path d={`M ${cx + tipX} ${cy + tipY} L ${veinEnd.x} ${veinEnd.y}`}
+          stroke="url(#veinGrad)" strokeWidth={0.6} fill="none" />
+      </g>
+    );
   };
+
   return (
     <motion.g
       animate={{ scale: [0.96, 1.05, 0.96] }}
       transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
       style={{ transformOrigin: `${cx}px ${cy}px` }}
     >
-      {/* Center leaf */}
-      <DecorativeLeaf x={cx} y={cy - 14} angleDeg={0} color="hsl(130 55% 42%)" size={9} opacity={0.9} />
-      {/* Left leaf */}
-      <path d={leafPath(-130, 16)} stroke="hsl(130 45% 35%)" strokeWidth={1.5} fill="none" />
-      <DecorativeLeaf x={cx - 10} y={cy - 10} angleDeg={-35} color="hsl(140 50% 38%)" size={8} opacity={0.85} />
-      {/* Right leaf */}
-      <path d={leafPath(-50, 16)} stroke="hsl(130 45% 35%)" strokeWidth={1.5} fill="none" />
-      <DecorativeLeaf x={cx + 10} y={cy - 10} angleDeg={35} color="hsl(135 50% 40%)" size={8} opacity={0.85} />
+      {realisticLeaf(0, 0, -90, 12, 'sproutLeafGrad')}
+      {realisticLeaf(-2, 3, -140, 10, 'sproutLeafGrad2')}
+      {realisticLeaf(2, 3, -40, 10, 'sproutLeafGrad2')}
+      {realisticLeaf(-1, 6, -160, 6, 'sproutLeafGrad')}
+      {realisticLeaf(1, 6, -20, 6, 'sproutLeafGrad')}
     </motion.g>
-  );
-}
-
-// ─── Trunk ────────────────────────────────────────────────────────────────────
-function Trunk() {
-  return (
-    <g>
-      {/* Shadow */}
-      <motion.path
-        d={`M ${TRUNK_X + 4} ${TRUNK_BOTTOM} C ${TRUNK_X + 4} ${TRUNK_BOTTOM - 60} ${TRUNK_X + 6} ${TRUNK_TOP + 40} ${TRUNK_X + 5} ${TRUNK_TOP}`}
-        stroke="hsl(25 30% 14%)" strokeWidth={18} strokeLinecap="round" fill="none"
-        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-        transition={{ duration: 1.4, ease: 'easeOut' }}
-      />
-      {/* Main */}
-      <motion.path
-        d={`M ${TRUNK_X} ${TRUNK_BOTTOM} C ${TRUNK_X} ${TRUNK_BOTTOM - 60} ${TRUNK_X - 2} ${TRUNK_TOP + 40} ${TRUNK_X} ${TRUNK_TOP}`}
-        stroke="hsl(25 40% 27%)" strokeWidth={14} strokeLinecap="round" fill="none"
-        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-        transition={{ duration: 1.4, ease: 'easeOut' }}
-      />
-      {/* Highlight */}
-      <motion.path
-        d={`M ${TRUNK_X - 3} ${TRUNK_BOTTOM - 10} C ${TRUNK_X - 3} ${TRUNK_BOTTOM - 50} ${TRUNK_X - 4} ${TRUNK_TOP + 50} ${TRUNK_X - 3} ${TRUNK_TOP + 10}`}
-        stroke="hsl(25 35% 38%)" strokeWidth={3} strokeLinecap="round" fill="none"
-        initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
-        transition={{ duration: 1.4, ease: 'easeOut', delay: 0.3 }}
-      />
-    </g>
   );
 }
 
@@ -368,6 +429,7 @@ export function MemoryTree({ memories, onLeafClick, userAge = 0, userBirthdate }
       className="w-full h-full"
       style={{ filter: `drop-shadow(0 20px 50px rgba(0,0,0,0.45)) ${healthFilter}` }}
     >
+      <TreeDefs />
       <ForestBackground />
       {userAge > 0 && <BaseCanopy age={userAge} />}
       <Trunk />
@@ -548,6 +610,7 @@ export function MemoryTree({ memories, onLeafClick, userAge = 0, userBirthdate }
                                   index={yi * 20 + si * 4 + mi * 10 + imgIdx}
                                   rotation={imgIdx % 2 === 0 ? -15 : 15}
                                   onClick={() => onLeafClick?.(mem)}
+                                  isVineLeaf
                                 />
                               );
                             })}
