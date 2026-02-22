@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trees, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Memory, Emotion, UserProfile } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
-import { MemoryTree } from '@/components/MemoryTree';
+import { MemoryTree3D } from '@/components/MemoryTree3D';
 import { MemoryModal } from '@/components/MemoryModal';
 import { AuthGate } from '@/components/AuthGate';
+import { getDominantSeason } from '@/lib/seasonTheme';
 
 const EMOTION_BADGE: Record<string, string> = {
   Happy: 'bg-forest-happy/20 text-forest-happy border-forest-happy/30',
@@ -14,12 +15,41 @@ const EMOTION_BADGE: Record<string, string> = {
   Normal: 'bg-forest-normal/20 text-forest-normal border-forest-normal/30',
 };
 
+const STORAGE_KEYS = {
+  user: 'memory-forest-user',
+  memories: 'memory-forest-memories',
+};
+
+function loadFromStorage<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
 export default function Index() {
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [memories, setMemories] = useState<Memory[]>([]);
+  const [user, setUser] = useState<UserProfile | null>(() => loadFromStorage<UserProfile>(STORAGE_KEYS.user));
+  const [memories, setMemories] = useState<Memory[]>(() => loadFromStorage<Memory[]>(STORAGE_KEYS.memories) || []);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [recentMemory, setRecentMemory] = useState<Memory | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+
+  // Persist user
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.user);
+    }
+  }, [user]);
+
+  // Persist memories
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.memories, JSON.stringify(memories));
+  }, [memories]);
 
   const handlePlant = useCallback((data: Omit<Memory, 'id' | 'timestamp'>) => {
     const newMemory: Memory = {
@@ -39,6 +69,8 @@ export default function Index() {
   if (!user) {
     return <AuthGate onEnter={setUser} />;
   }
+
+  const dominantSeason = getDominantSeason(memories);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
@@ -81,6 +113,7 @@ export default function Index() {
           {/* Stats */}
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground">Age {user.age}</span>
+            <span className="text-xs text-muted-foreground capitalize">{dominantSeason}</span>
             {memories.length > 0 && (
               <motion.div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted border border-border"
@@ -98,16 +131,14 @@ export default function Index() {
           </div>
         </header>
 
-        {/* Tree canvas */}
-        <div className="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
-          <div className="w-full h-full max-w-3xl">
-            <MemoryTree
-              memories={memories}
-              onLeafClick={setSelectedMemory}
-              userAge={user.age}
-              userBirthdate={user.birthdate}
-            />
-          </div>
+        {/* 3D Tree canvas */}
+        <div className="flex-1 overflow-hidden relative">
+          <MemoryTree3D
+            memories={memories}
+            onLeafClick={setSelectedMemory}
+            userAge={user.age}
+            userBirthdate={user.birthdate}
+          />
 
           {/* Floating "new memory" toast */}
           <AnimatePresence>
