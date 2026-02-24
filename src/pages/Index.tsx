@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trees, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trees, Sparkles, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { Memory, Emotion, UserProfile } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
 import { MemoryTree3D } from '@/components/MemoryTree3D';
@@ -128,6 +128,13 @@ export default function Index() {
                 </span>
               </motion.div>
             )}
+            <button
+              onClick={() => { setUser(null); setMemories([]); localStorage.removeItem(STORAGE_KEYS.user); localStorage.removeItem(STORAGE_KEYS.memories); }}
+              className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
+              title="Logout"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </header>
 
