@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Memory, Season, getSeason, getYear, isBirthdayToday, isTreeHealthy } from '@/types/memory';
 import { LeafNode } from './LeafNode';
 import { getSeasonTheme, SeasonTheme } from '@/lib/seasonTheme';
+import { WindEffect, FallingLeaves, useDayNightCycle } from './TreeEffects';
 
 interface MemoryTree3DProps {
   memories: Memory[];
@@ -278,6 +279,13 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
   const yearGroups = useMemo(() => groupMemories(memories), [memories]);
   const showBirthday = userBirthdate ? isBirthdayToday(userBirthdate) : false;
   const healthy = isTreeHealthy(memories);
+  const dayNight = useDayNightCycle();
+  const dominantSeason = useMemo(() => {
+    const seasons = memories.map(m => getSeason(m.memoryDate));
+    const counts: Record<string, number> = {};
+    seasons.forEach(s => { counts[s] = (counts[s] || 0) + 1; });
+    return Object.entries(counts).sort(([,a],[,b]) => b - a)[0]?.[0] || 'Summer';
+  }, [memories]);
 
   const trunkHeight = 3.5 + Math.min(userAge * 0.05, 1.5);
   const trunkTop = trunkHeight / 2;
@@ -347,14 +355,14 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
 
   return (
     <>
-      {/* Lighting */}
-      <ambientLight color={theme.ambientColor} intensity={theme.ambientIntensity * 1.2} />
-      <directionalLight color={theme.directionalColor} intensity={theme.directionalIntensity * 1.3} position={[4, 6, 3]} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-      <pointLight color="#22c55e" intensity={0.5} position={[0, trunkTop + 0.5, 0]} distance={5} />
-      <pointLight color="#fbbf24" intensity={0.2} position={[-2, 0, 2]} distance={6} />
-      <hemisphereLight color="#87ceeb" groundColor="#3d2b1f" intensity={0.3} />
+      {/* Day/Night adjusted lighting */}
+      <ambientLight color={dayNight.ambientColor} intensity={dayNight.ambientIntensity * theme.ambientIntensity * 1.5} />
+      <directionalLight color={dayNight.directionalColor} intensity={dayNight.directionalIntensity * theme.directionalIntensity * 1.2} position={[4, 6, 3]} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
+      <pointLight color="#22c55e" intensity={0.5 * dayNight.ambientIntensity} position={[0, trunkTop + 0.5, 0]} distance={5} />
+      <pointLight color="#fbbf24" intensity={0.2 * dayNight.ambientIntensity} position={[-2, 0, 2]} distance={6} />
+      <hemisphereLight color={dayNight.skyColor} groundColor="#3d2b1f" intensity={0.3} />
 
-      <fog attach="fog" args={[theme.fogColor, 8, 18]} />
+      <fog attach="fog" args={[dayNight.fogColor, 8, 18]} />
 
       <Ground color={theme.groundColor} />
 
@@ -370,7 +378,7 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
         );
       })}
 
-      <group>
+      <WindEffect>
         {/* Trunk */}
         <Trunk height={trunkHeight} />
 
@@ -465,10 +473,18 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
             })}
           </group>
         ))}
-      </group>
+      </WindEffect>
 
+      <FallingLeaves count={15} bounds={3.5} season={dominantSeason} />
       <Fireflies3D count={Math.max(memories.length, 4)} />
       {showBirthday && <BirthdayBlooms3D />}
+
+      {/* Day/Night label */}
+      <Html position={[3, 3, 0]} center>
+        <span className="text-[10px] text-muted-foreground/60 select-none pointer-events-none">
+          {dayNight.label === 'Night' ? '🌙' : dayNight.label === 'Dawn' ? '🌅' : dayNight.label === 'Dusk' ? '🌇' : '☀️'} {dayNight.label}
+        </span>
+      </Html>
 
       {memories.length === 0 && (
         <Html position={[0, -1.5, 0]} center>
