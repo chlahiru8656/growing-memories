@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trees, Sparkles, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
-import { Memory, Emotion, UserProfile } from '@/types/memory';
+import { Trees, Sparkles, ChevronLeft, ChevronRight, LogOut, TreePine, List } from 'lucide-react';
+import { Memory, Emotion, UserProfile, calculateAge } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
 import { MemoryTree3D } from '@/components/MemoryTree3D';
 import { MemoryModal } from '@/components/MemoryModal';
-import { AuthGate } from '@/components/AuthGate';
+import { AuthPage } from '@/components/AuthPage';
+import { TimelineView } from '@/components/TimelineView';
 import { getDominantSeason } from '@/lib/seasonTheme';
+import { supabase } from '@/integrations/supabase/client';
 
 const EMOTION_BADGE: Record<string, string> = {
   Happy: 'bg-forest-happy/20 text-forest-happy border-forest-happy/30',
@@ -15,59 +17,181 @@ const EMOTION_BADGE: Record<string, string> = {
   Normal: 'bg-forest-normal/20 text-forest-normal border-forest-normal/30',
 };
 
-const STORAGE_KEYS = {
-  user: 'memory-forest-user',
-  memories: 'memory-forest-memories',
-};
-
-function loadFromStorage<T>(key: string): T | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
+const DEFAULT_CONNECTIONS = ['Mom', 'Dad', 'Best Friend', 'Sibling', 'Partner'];
 
 export default function Index() {
-  const [user, setUser] = useState<UserProfile | null>(() => loadFromStorage<UserProfile>(STORAGE_KEYS.user));
-  const [memories, setMemories] = useState<Memory[]>(() => loadFromStorage<Memory[]>(STORAGE_KEYS.memories) || []);
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [memories, setMemories] = useState<Memory[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [recentMemory, setRecentMemory] = useState<Memory | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [viewMode, setViewMode] = useState<'tree' | 'timeline'>('tree');
 
-  // Persist user
+  // Auth listener
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(STORAGE_KEYS.user, JSON.stringify(user));
-    } else {
-      localStorage.removeItem(STORAGE_KEYS.user);
-    }
-  }, [user]);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) {
+        setUser(null);
+        setMemories([]);
+      }
+      setLoading(false);
+    });
 
-  // Persist memories
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.memories, JSON.stringify(memories));
-  }, [memories]);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-  const handlePlant = useCallback((data: Omit<Memory, 'id' | 'timestamp'>) => {
-    const newMemory: Memory = {
-      ...data,
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-    };
-    setMemories((prev) => [...prev, newMemory]);
-    setRecentMemory(newMemory);
-    setTimeout(() => setRecentMemory(null), 3500);
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleDelete = useCallback((id: string) => {
+  // Load profile and memories when session changes
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const loadProfile = async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (profile) {
+        setUser({
+          name: profile.name,
+          birthdate: profile.birthdate,
+          age: calculateAge(profile.birthdate),
+          connections: profile.connections || DEFAULT_CONNECTIONS,
+        });
+      } else {
+        // Create profile from signup metadata
+        const meta = session.user.user_metadata;
+        const name = meta?.name || 'Forest Explorer';
+        const birthdate = meta?.birthdate || '2000-01-01';
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .insert({
+            user_id: session.user.id,
+            name,
+            birthdate,
+            connections: DEFAULT_CONNECTIONS,
+          })
+          .select()
+          .single();
+
+        if (newProfile) {
+          setUser({
+            name: newProfile.name,
+            birthdate: newProfile.birthdate,
+            age: calculateAge(newProfile.birthdate),
+            connections: newProfile.connections || DEFAULT_CONNECTIONS,
+          });
+        }
+      }
+    };
+
+    const loadMemories = async () => {
+      const { data } = await supabase
+        .from('memories')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: true });
+
+      if (data) {
+        setMemories(data.map((m: any) => ({
+          id: m.id,
+          imageUrl: m.image_url,
+          imageUrls: m.image_urls || [],
+          isCollection: m.is_collection,
+          description: m.description,
+          emotion: m.emotion as Emotion,
+          timestamp: new Date(m.created_at),
+          memoryDate: m.memory_date,
+          connections: m.connections || undefined,
+        })));
+      }
+    };
+
+    loadProfile();
+    loadMemories();
+  }, [session]);
+
+  const handlePlant = useCallback(async (data: Omit<Memory, 'id' | 'timestamp'>) => {
+    if (!session?.user) return;
+
+    const { data: inserted, error } = await supabase
+      .from('memories')
+      .insert({
+        user_id: session.user.id,
+        image_url: data.imageUrl,
+        image_urls: data.imageUrls,
+        is_collection: data.isCollection,
+        description: data.description,
+        emotion: data.emotion,
+        memory_date: data.memoryDate,
+        connections: data.connections || [],
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error planting memory:', error);
+      return;
+    }
+
+    if (inserted) {
+      const newMemory: Memory = {
+        id: inserted.id,
+        imageUrl: inserted.image_url,
+        imageUrls: inserted.image_urls || [],
+        isCollection: inserted.is_collection,
+        description: inserted.description,
+        emotion: inserted.emotion as Emotion,
+        timestamp: new Date(inserted.created_at),
+        memoryDate: inserted.memory_date,
+        connections: inserted.connections || undefined,
+      };
+      setMemories((prev) => [...prev, newMemory]);
+      setRecentMemory(newMemory);
+      setTimeout(() => setRecentMemory(null), 3500);
+    }
+  }, [session]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    await supabase.from('memories').delete().eq('id', id);
     setMemories((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setMemories([]);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ background: 'var(--gradient-sky)' }}>
+        <div className="flex flex-col items-center gap-3">
+          <Trees className="w-8 h-8 text-primary animate-pulse" />
+          <p className="text-sm text-muted-foreground">Loading your forest...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthPage onAuth={() => {}} />;
+  }
+
   if (!user) {
-    return <AuthGate onEnter={setUser} />;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background" style={{ background: 'var(--gradient-sky)' }}>
+        <Trees className="w-8 h-8 text-primary animate-pulse" />
+      </div>
+    );
   }
 
   const dominantSeason = getDominantSeason(memories);
@@ -110,8 +234,26 @@ export default function Index() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* View toggle + Stats */}
           <div className="flex items-center gap-3">
+            {/* View mode toggle */}
+            <div className="flex items-center bg-muted rounded-lg p-0.5 border border-border">
+              <button
+                onClick={() => setViewMode('tree')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'tree' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Tree View"
+              >
+                <TreePine className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('timeline')}
+                className={`p-1.5 rounded-md transition-all ${viewMode === 'timeline' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                title="Timeline View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+
             <span className="text-xs text-muted-foreground">Age {user.age}</span>
             <span className="text-xs text-muted-foreground capitalize">{dominantSeason}</span>
             {memories.length > 0 && (
@@ -129,7 +271,7 @@ export default function Index() {
               </motion.div>
             )}
             <button
-              onClick={() => { setUser(null); setMemories([]); localStorage.removeItem(STORAGE_KEYS.user); localStorage.removeItem(STORAGE_KEYS.memories); }}
+              onClick={handleLogout}
               className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
               title="Logout"
             >
@@ -138,14 +280,18 @@ export default function Index() {
           </div>
         </header>
 
-        {/* 3D Tree canvas */}
+        {/* Main content: Tree or Timeline */}
         <div className="flex-1 overflow-hidden relative">
-          <MemoryTree3D
-            memories={memories}
-            onLeafClick={setSelectedMemory}
-            userAge={user.age}
-            userBirthdate={user.birthdate}
-          />
+          {viewMode === 'tree' ? (
+            <MemoryTree3D
+              memories={memories}
+              onLeafClick={setSelectedMemory}
+              userAge={user.age}
+              userBirthdate={user.birthdate}
+            />
+          ) : (
+            <TimelineView memories={memories} onMemoryClick={setSelectedMemory} />
+          )}
 
           {/* Floating "new memory" toast */}
           <AnimatePresence>
@@ -177,7 +323,7 @@ export default function Index() {
 
         {/* Memory strip at bottom */}
         <AnimatePresence>
-          {memories.length > 0 && (
+          {memories.length > 0 && viewMode === 'tree' && (
             <motion.div
               initial={{ y: 80 }}
               animate={{ y: 0 }}
