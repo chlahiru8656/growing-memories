@@ -45,55 +45,91 @@ function groupMemories(memories: Memory[]): YearGroup[] {
     }));
 }
 
-// ─── Realistic trunk with bark texture ───────────────────────────────────
+// ─── Realistic trunk with bark-like ridges ───────────────────────────────
 function Trunk({ height }: { height: number }) {
   const geometry = useMemo(() => {
     const points: THREE.Vector2[] = [];
-    const segments = 32;
+    const segments = 48;
     for (let i = 0; i <= segments; i++) {
       const t = i / segments;
-      // Organic taper with slight bulge at base
-      const bulge = Math.sin(t * Math.PI) * 0.03;
-      const radius = 0.22 * (1 - t * 0.55) + bulge;
+      // Natural taper: wide root flare, gradual narrowing
+      const rootFlare = Math.pow(1 - t, 3) * 0.12;
+      const baseRadius = 0.18 * (1 - t * 0.5);
+      const barkBump = Math.sin(t * Math.PI * 8) * 0.008 + Math.sin(t * Math.PI * 13) * 0.004;
+      const radius = baseRadius + rootFlare + barkBump;
       const y = t * height;
       points.push(new THREE.Vector2(radius, y));
     }
-    return new THREE.LatheGeometry(points, 16);
+    return new THREE.LatheGeometry(points, 24);
   }, [height]);
 
   return (
     <mesh geometry={geometry} position={[0, -height / 2, 0]} castShadow receiveShadow>
       <meshStandardMaterial
-        color="#5a3d1a"
-        roughness={0.95}
-        metalness={0.02}
+        color="#3d2b14"
+        roughness={1}
+        metalness={0}
       />
     </mesh>
   );
 }
 
-// ─── Decorative foliage cluster (always visible) ─────────────────────────
-function FoliageCluster({ position, scale = 1, color = '#2d6b2f' }: { position: [number, number, number]; scale?: number; color?: string }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+// ─── Organic canopy cluster — layered spheres for volume ─────────────────
+function CanopyCluster({ position, scale = 1, color = '#1a4d1e', opacity = 0.92 }: {
+  position: [number, number, number]; scale?: number; color?: string; opacity?: number;
+}) {
+  const meshRef = useRef<THREE.Group>(null);
   
+  // Subtle organic breathing
   useFrame((state) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y = state.clock.elapsedTime * 0.1;
-      const s = scale * (1 + Math.sin(state.clock.elapsedTime * 0.5 + position[0]) * 0.02);
+      const t = state.clock.elapsedTime;
+      const s = scale * (1 + Math.sin(t * 0.3 + position[0] * 2) * 0.008);
       meshRef.current.scale.setScalar(s);
     }
   });
 
+  // Multiple overlapping spheres create a natural, cloud-like canopy
+  const subClusters = useMemo(() => {
+    const clusters: { offset: [number, number, number]; r: number; c: string }[] = [];
+    const baseR = 0.32 * scale;
+    // Central mass
+    clusters.push({ offset: [0, 0, 0], r: baseR, c: color });
+    // Surrounding sub-spheres for organic shape
+    const n = 5 + Math.floor(scale * 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + (scale * 0.5);
+      const elevation = (Math.random() - 0.4) * baseR * 0.8;
+      const dist = baseR * (0.5 + Math.random() * 0.4);
+      const subR = baseR * (0.5 + Math.random() * 0.35);
+      // Vary green tones slightly
+      const hue = 120 + (Math.random() - 0.5) * 30;
+      const sat = 30 + Math.random() * 25;
+      const light = 18 + Math.random() * 14;
+      clusters.push({
+        offset: [Math.cos(a) * dist, elevation, Math.sin(a) * dist],
+        r: subR,
+        c: `hsl(${hue}, ${sat}%, ${light}%)`,
+      });
+    }
+    return clusters;
+  }, [scale, color]);
+
   return (
-    <mesh ref={meshRef} position={position} castShadow>
-      <dodecahedronGeometry args={[0.35 * scale, 1]} />
-      <meshStandardMaterial
-        color={color}
-        roughness={0.85}
-        metalness={0.05}
-        flatShading
-      />
-    </mesh>
+    <group ref={meshRef} position={position}>
+      {subClusters.map((cl, i) => (
+        <mesh key={i} position={cl.offset} castShadow>
+          <sphereGeometry args={[cl.r, 12, 10]} />
+          <meshStandardMaterial
+            color={cl.c}
+            roughness={0.92}
+            metalness={0}
+            transparent
+            opacity={opacity}
+          />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
@@ -103,7 +139,7 @@ function Sprout({ y }: { y: number }) {
   
   useFrame((state) => {
     if (groupRef.current) {
-      const s = 1 + Math.sin(state.clock.elapsedTime * 0.8) * 0.04;
+      const s = 1 + Math.sin(state.clock.elapsedTime * 0.8) * 0.03;
       groupRef.current.scale.set(s, s, s);
     }
   });
@@ -111,8 +147,8 @@ function Sprout({ y }: { y: number }) {
   const leafShape = useMemo(() => {
     const shape = new THREE.Shape();
     shape.moveTo(0, 0);
-    shape.bezierCurveTo(0.06, 0.08, 0.04, 0.2, 0, 0.3);
-    shape.bezierCurveTo(-0.04, 0.2, -0.06, 0.08, 0, 0);
+    shape.bezierCurveTo(0.05, 0.06, 0.035, 0.16, 0, 0.22);
+    shape.bezierCurveTo(-0.035, 0.16, -0.05, 0.06, 0, 0);
     return shape;
   }, []);
 
@@ -122,17 +158,15 @@ function Sprout({ y }: { y: number }) {
     <group ref={groupRef} position={[0, y, 0]}>
       {[0, 72, 144, 216, 288].map((angle, i) => {
         const rad = (angle * Math.PI) / 180;
-        const tiltAngle = -0.4 - i * 0.08;
+        const tiltAngle = -0.3 - i * 0.06;
         return (
           <group key={i} rotation={[0, rad, 0]}>
-            <mesh geometry={leafGeo} position={[0, 0.05, 0.04]} rotation={[tiltAngle, 0, 0]}>
+            <mesh geometry={leafGeo} position={[0, 0.04, 0.03]} rotation={[tiltAngle, 0, 0]}>
               <meshStandardMaterial
-                color={i % 2 === 0 ? '#22c55e' : '#16a34a'}
-                roughness={0.5}
-                metalness={0.05}
+                color={i % 2 === 0 ? '#2d8a37' : '#1f6b28'}
+                roughness={0.7}
+                metalness={0}
                 side={THREE.DoubleSide}
-                emissive="#22c55e"
-                emissiveIntensity={0.15}
               />
             </mesh>
           </group>
@@ -142,20 +176,20 @@ function Sprout({ y }: { y: number }) {
   );
 }
 
-// ─── Branch mesh ─────────────────────────────────────────────────────────
+// ─── Branch mesh (organic curve) ─────────────────────────────────────────
 function Branch({ start, end, thickness, color }: { start: THREE.Vector3; end: THREE.Vector3; thickness: number; color: string }) {
   const midPoint = useMemo(() => {
     const mid = new THREE.Vector3().lerpVectors(start, end, 0.5);
-    mid.y += 0.15;
+    mid.y += 0.12;
     return mid;
   }, [start, end]);
 
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(start, midPoint, end), [start, midPoint, end]);
-  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curve, 12, thickness, 8, false), [curve, thickness]);
+  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curve, 16, thickness, 8, false), [curve, thickness]);
 
   return (
     <mesh geometry={tubeGeo} castShadow>
-      <meshStandardMaterial color={color} roughness={0.85} metalness={0.05} />
+      <meshStandardMaterial color={color} roughness={0.95} metalness={0} />
     </mesh>
   );
 }
@@ -168,7 +202,7 @@ function VineCollection({ memory, startPos, onLeafClick, side, index }: {
   const endPos = useMemo(() => new THREE.Vector3(startPos.x + side * 0.15, startPos.y - vineLength, startPos.z), [startPos, vineLength, side]);
   const midPos = useMemo(() => new THREE.Vector3(startPos.x + side * 0.25, startPos.y - vineLength * 0.5, startPos.z + 0.1), [startPos, vineLength, side]);
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(startPos, midPos, endPos), [startPos, midPos, endPos]);
-  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curve, 12, 0.012, 5, false), [curve]);
+  const tubeGeo = useMemo(() => new THREE.TubeGeometry(curve, 12, 0.01, 5, false), [curve]);
   const leafPositions = useMemo(() => memory.imageUrls.map((_, i) => {
     const t = (i + 1) / (memory.imageUrls.length + 1);
     return curve.getPointAt(t);
@@ -177,7 +211,7 @@ function VineCollection({ memory, startPos, onLeafClick, side, index }: {
   return (
     <group>
       <mesh geometry={tubeGeo}>
-        <meshStandardMaterial color="#4ade80" roughness={0.7} metalness={0.05} transparent opacity={0.7} />
+        <meshStandardMaterial color="#2d6b2f" roughness={0.8} metalness={0} transparent opacity={0.7} />
       </mesh>
       {memory.imageUrls.map((imgUrl, imgIdx) => {
         const pos = leafPositions[imgIdx];
@@ -194,13 +228,21 @@ function VineCollection({ memory, startPos, onLeafClick, side, index }: {
   );
 }
 
-// ─── Ground plane ────────────────────────────────────────────────────────
+// ─── Ground plane with texture feel ──────────────────────────────────────
 function Ground({ color }: { color: string }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]} receiveShadow>
-      <circleGeometry args={[6, 48]} />
-      <meshStandardMaterial color={color} roughness={1} />
-    </mesh>
+    <group>
+      {/* Main ground */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.5, 0]} receiveShadow>
+        <circleGeometry args={[7, 64]} />
+        <meshStandardMaterial color={color} roughness={1} metalness={0} />
+      </mesh>
+      {/* Subtle mound under tree roots */}
+      <mesh position={[0, -2.35, 0]} receiveShadow>
+        <sphereGeometry args={[1.2, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+        <meshStandardMaterial color="#1a2a12" roughness={1} metalness={0} transparent opacity={0.6} />
+      </mesh>
+    </group>
   );
 }
 
@@ -235,7 +277,7 @@ function Fireflies3D({ count }: { count: number }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" count={n} array={positions} itemSize={3} />
       </bufferGeometry>
-      <pointsMaterial color="#ffffaa" size={0.05} transparent opacity={0.7} sizeAttenuation />
+      <pointsMaterial color="#ffffcc" size={0.04} transparent opacity={0.5} sizeAttenuation />
     </points>
   );
 }
@@ -274,6 +316,36 @@ function BirthdayBlooms3D() {
   );
 }
 
+// ─── Exposed roots ───────────────────────────────────────────────────────
+function ExposedRoots({ trunkHeight }: { trunkHeight: number }) {
+  const roots = useMemo(() => {
+    const result: { start: THREE.Vector3; end: THREE.Vector3; thickness: number }[] = [];
+    const rootCount = 5;
+    for (let i = 0; i < rootCount; i++) {
+      const angle = (i / rootCount) * Math.PI * 2 + 0.2;
+      const length = 0.6 + Math.random() * 0.5;
+      result.push({
+        start: new THREE.Vector3(0, -trunkHeight / 2 + 0.05, 0),
+        end: new THREE.Vector3(
+          Math.cos(angle) * length,
+          -trunkHeight / 2 - 0.15 - Math.random() * 0.1,
+          Math.sin(angle) * length
+        ),
+        thickness: 0.025 + Math.random() * 0.015,
+      });
+    }
+    return result;
+  }, [trunkHeight]);
+
+  return (
+    <>
+      {roots.map((r, i) => (
+        <Branch key={`root-${i}`} start={r.start} end={r.end} thickness={r.thickness} color="#2e1f0e" />
+      ))}
+    </>
+  );
+}
+
 // ─── Scene content ───────────────────────────────────────────────────────
 function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }: MemoryTree3DProps & { theme: SeasonTheme }) {
   const yearGroups = useMemo(() => groupMemories(memories), [memories]);
@@ -290,45 +362,61 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
   const trunkHeight = 3.5 + Math.min(userAge * 0.05, 1.5);
   const trunkTop = trunkHeight / 2;
 
-  // Decorative foliage positions — always visible canopy
-  const foliagePositions = useMemo(() => {
-    const positions: { pos: [number, number, number]; scale: number; color: string }[] = [];
-    const greens = ['#2d6b2f', '#1a5c1e', '#3a8f3e', '#276d29', '#1e7a22', '#4a9e4e'];
-    // Top canopy cluster
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
+  // Realistic layered canopy — many overlapping organic clusters
+  const canopyPositions = useMemo(() => {
+    const positions: { pos: [number, number, number]; scale: number; color: string; opacity: number }[] = [];
+    
+    // Dense top crown — main mass
+    const topLayers = 3;
+    for (let layer = 0; layer < topLayers; layer++) {
+      const count = layer === 0 ? 1 : 5 + layer * 2;
+      const layerY = trunkTop - 0.1 + layer * 0.25;
+      const layerRadius = 0.15 + layer * 0.35;
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + layer * 0.4;
+        const r = layer === 0 ? 0 : layerRadius + (Math.random() - 0.5) * 0.15;
+        const hue = 115 + Math.random() * 30;
+        const sat = 28 + Math.random() * 22;
+        const light = 16 + Math.random() * 12 + layer * 2;
+        positions.push({
+          pos: [Math.cos(angle) * r, layerY + (Math.random() - 0.5) * 0.15, Math.sin(angle) * r],
+          scale: 0.9 + Math.random() * 0.6 - layer * 0.1,
+          color: `hsl(${hue}, ${sat}%, ${light}%)`,
+          opacity: 0.9 - layer * 0.05,
+        });
+      }
+    }
+    
+    // Mid-canopy volume
+    for (let i = 0; i < 4; i++) {
+      const angle = (i / 4) * Math.PI * 2 + 0.5;
       const r = 0.5 + Math.random() * 0.3;
+      const hue = 120 + Math.random() * 25;
       positions.push({
-        pos: [Math.cos(angle) * r, trunkTop - 0.2 + Math.random() * 0.4, Math.sin(angle) * r],
-        scale: 0.8 + Math.random() * 0.5,
-        color: greens[i % greens.length],
+        pos: [Math.cos(angle) * r, trunkTop * 0.65 + Math.random() * 0.2, Math.sin(angle) * r],
+        scale: 0.5 + Math.random() * 0.3,
+        color: `hsl(${hue}, 32%, ${20 + Math.random() * 8}%)`,
+        opacity: 0.85,
       });
     }
-    // Mid-level foliage
-    for (let i = 0; i < 5; i++) {
-      const angle = (i / 5) * Math.PI * 2 + 0.3;
-      const r = 0.7 + Math.random() * 0.4;
-      positions.push({
-        pos: [Math.cos(angle) * r, trunkTop * 0.5 + Math.random() * 0.3, Math.sin(angle) * r],
-        scale: 0.6 + Math.random() * 0.3,
-        color: greens[(i + 3) % greens.length],
-      });
-    }
+    
     return positions;
   }, [trunkTop]);
 
-  // Demo branches (always visible structural branches)
-  const demoBranches = useMemo(() => {
+  // Structural branches with natural randomness
+  const structuralBranches = useMemo(() => {
     const branches: { start: THREE.Vector3; end: THREE.Vector3; thickness: number }[] = [];
-    const count = 6;
+    const count = 7;
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const yPos = -trunkHeight / 2 + trunkHeight * (0.35 + (i / count) * 0.45);
-      const length = 0.8 + Math.random() * 0.5;
+      const angle = (i / count) * Math.PI * 2 + (i % 2) * 0.3;
+      const tPos = 0.3 + (i / count) * 0.5;
+      const yPos = -trunkHeight / 2 + trunkHeight * tPos;
+      const length = 0.6 + Math.random() * 0.6;
+      const upward = 0.15 + Math.random() * 0.2;
       branches.push({
         start: new THREE.Vector3(0, yPos, 0),
-        end: new THREE.Vector3(Math.cos(angle) * length, yPos + 0.25, Math.sin(angle) * length),
-        thickness: 0.03 + Math.random() * 0.015,
+        end: new THREE.Vector3(Math.cos(angle) * length, yPos + upward, Math.sin(angle) * length),
+        thickness: 0.035 - (i / count) * 0.01 + Math.random() * 0.008,
       });
     }
     return branches;
@@ -355,25 +443,36 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
 
   return (
     <>
-      {/* Day/Night adjusted lighting */}
-      <ambientLight color={dayNight.ambientColor} intensity={dayNight.ambientIntensity * theme.ambientIntensity * 1.5} />
-      <directionalLight color={dayNight.directionalColor} intensity={dayNight.directionalIntensity * theme.directionalIntensity * 1.2} position={[4, 6, 3]} castShadow shadow-mapSize-width={1024} shadow-mapSize-height={1024} />
-      <pointLight color="#22c55e" intensity={0.5 * dayNight.ambientIntensity} position={[0, trunkTop + 0.5, 0]} distance={5} />
-      <pointLight color="#fbbf24" intensity={0.2 * dayNight.ambientIntensity} position={[-2, 0, 2]} distance={6} />
-      <hemisphereLight color={dayNight.skyColor} groundColor="#3d2b1f" intensity={0.3} />
+      {/* Naturalistic lighting */}
+      <ambientLight color={dayNight.ambientColor} intensity={dayNight.ambientIntensity * theme.ambientIntensity * 1.2} />
+      <directionalLight
+        color={dayNight.directionalColor}
+        intensity={dayNight.directionalIntensity * theme.directionalIntensity * 1.0}
+        position={[5, 8, 4]}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0001}
+      />
+      {/* Subtle fill light from opposite side */}
+      <directionalLight color="#6b8caa" intensity={0.15 * dayNight.ambientIntensity} position={[-4, 3, -3]} />
+      {/* Warm light filtering through canopy */}
+      <pointLight color="#3a6b3a" intensity={0.3 * dayNight.ambientIntensity} position={[0, trunkTop, 0]} distance={4} decay={2} />
+      <hemisphereLight color={dayNight.skyColor} groundColor="#1a1208" intensity={0.25} />
 
-      <fog attach="fog" args={[dayNight.fogColor, 8, 18]} />
+      <fog attach="fog" args={[dayNight.fogColor, 10, 22]} />
 
       <Ground color={theme.groundColor} />
+      <ExposedRoots trunkHeight={trunkHeight} />
 
-      {/* Grass patches on ground */}
-      {Array.from({ length: 12 }).map((_, i) => {
-        const angle = (i / 12) * Math.PI * 2;
-        const r = 1.5 + Math.random() * 2;
+      {/* Scattered ground debris — small organic details */}
+      {Array.from({ length: 16 }).map((_, i) => {
+        const angle = (i / 16) * Math.PI * 2 + i * 0.3;
+        const r = 0.8 + Math.random() * 3;
         return (
-          <mesh key={`grass-${i}`} position={[Math.cos(angle) * r, -2.45, Math.sin(angle) * r]} rotation={[-Math.PI / 2, 0, angle]}>
-            <circleGeometry args={[0.15 + Math.random() * 0.1, 6]} />
-            <meshStandardMaterial color="#2a5a2e" roughness={1} />
+          <mesh key={`debris-${i}`} position={[Math.cos(angle) * r, -2.48, Math.sin(angle) * r]} rotation={[-Math.PI / 2, 0, angle]}>
+            <circleGeometry args={[0.04 + Math.random() * 0.06, 5]} />
+            <meshStandardMaterial color={i % 3 === 0 ? '#1e3316' : '#2a1e0e'} roughness={1} />
           </mesh>
         );
       })}
@@ -383,38 +482,32 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
         <Trunk height={trunkHeight} />
 
         {/* Sprout at top */}
-        <Sprout y={trunkTop} />
+        <Sprout y={trunkTop + 0.15} />
 
-        {/* Decorative foliage canopy (always visible) */}
-        {foliagePositions.map((f, i) => (
-          <FoliageCluster key={`foliage-${i}`} position={f.pos} scale={f.scale} color={f.color} />
+        {/* Realistic layered canopy */}
+        {canopyPositions.map((f, i) => (
+          <CanopyCluster key={`canopy-${i}`} position={f.pos} scale={f.scale} color={f.color} opacity={f.opacity} />
         ))}
 
-        {/* Demo structural branches (always visible) */}
-        {demoBranches.map((b, i) => (
-          <Branch key={`demo-branch-${i}`} start={b.start} end={b.end} thickness={b.thickness} color="#6b4c30" />
+        {/* Structural branches */}
+        {structuralBranches.map((b, i) => (
+          <Branch key={`struct-branch-${i}`} start={b.start} end={b.end} thickness={b.thickness} color="#2e1f0e" />
         ))}
 
-        {/* Small decorative leaves on demo branches */}
-        {demoBranches.map((b, i) => (
-          <mesh key={`demo-leaf-${i}`} position={[b.end.x * 1.05, b.end.y + 0.05, b.end.z * 1.05]}>
-            <sphereGeometry args={[0.08 + Math.random() * 0.04, 8, 6]} />
-            <meshStandardMaterial color={i % 2 === 0 ? '#3a8f3e' : '#2d6b2f'} roughness={0.8} flatShading />
-          </mesh>
-        ))}
-
-        {/* Age-scaled canopy glow */}
-        {userAge > 0 && (
-          <mesh position={[0, trunkTop - 0.3, 0]}>
-            <sphereGeometry args={[0.5 + userAge * 0.015, 16, 12]} />
-            <meshStandardMaterial color={healthy ? '#1a4a20' : '#3a3520'} transparent opacity={0.15} roughness={1} />
-          </mesh>
-        )}
+        {/* Small twig ends on structural branches */}
+        {structuralBranches.map((b, i) => {
+          const tipDir = new THREE.Vector3().subVectors(b.end, b.start).normalize();
+          const twigEnd = b.end.clone().add(tipDir.multiplyScalar(0.2));
+          twigEnd.y += 0.08;
+          return (
+            <Branch key={`twig-${i}`} start={b.end} end={twigEnd} thickness={0.008} color="#3d2b14" />
+          );
+        })}
 
         {/* Memory year branches + leaves */}
         {branchLayouts.map((yg, yi) => (
           <group key={yg.year}>
-            <Branch start={yg.start} end={yg.end} thickness={0.04} color="#5a4530" />
+            <Branch start={yg.start} end={yg.end} thickness={0.04} color="#3d2b14" />
             <Html position={[yg.end.x * 1.15, yg.end.y, yg.end.z * 1.15]} center>
               <span className="text-[10px] font-display italic text-foreground/70 whitespace-nowrap select-none pointer-events-none">{yg.year}</span>
             </Html>
@@ -437,7 +530,7 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
 
               return (
                 <group key={sg.season}>
-                  <Branch start={originOnBranch} end={seasonEnd} thickness={0.02} color={cfg.color} />
+                  <Branch start={originOnBranch} end={seasonEnd} thickness={0.018} color={cfg.color} />
                   <Html position={[seasonEnd.x * 1.08, seasonEnd.y + 0.1, seasonEnd.z * 1.08]} center>
                     <span className="text-[8px] whitespace-nowrap select-none pointer-events-none" style={{ color: cfg.color }}>
                       {cfg.emoji} {cfg.label}
@@ -475,8 +568,8 @@ function TreeScene({ memories, onLeafClick, userAge = 0, userBirthdate, theme }:
         ))}
       </WindEffect>
 
-      <FallingLeaves count={15} bounds={3.5} season={dominantSeason} />
-      <Fireflies3D count={Math.max(memories.length, 4)} />
+      <FallingLeaves count={12} bounds={3} season={dominantSeason} />
+      <Fireflies3D count={Math.max(memories.length, 3)} />
       {showBirthday && <BirthdayBlooms3D />}
 
       {/* Day/Night label */}
@@ -517,7 +610,7 @@ export function MemoryTree3D(props: MemoryTree3DProps) {
           minPolarAngle={Math.PI / 4}
           maxPolarAngle={Math.PI / 2.1}
           autoRotate
-          autoRotateSpeed={0.3}
+          autoRotateSpeed={0.2}
         />
         <TreeScene {...props} theme={theme} />
       </Canvas>
