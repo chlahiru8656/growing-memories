@@ -301,31 +301,15 @@ export function PlantSeedForm({ onPlant, connections = [], userId }: PlantSeedFo
         </div>
       </div>
 
-      {/* Tag Connections */}
-      {connections.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5" />
-            Tag Connections
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {connections.map((c) => (
-              <motion.button
-                key={c}
-                type="button"
-                onClick={() => toggleConnection(c)}
-                whileTap={{ scale: 0.95 }}
-                className={`text-xs py-1.5 px-3 rounded-full border transition-all duration-200 ${
-                  taggedConnections.includes(c)
-                    ? 'border-accent bg-accent/20 text-accent-foreground'
-                    : 'border-border bg-muted/40 text-muted-foreground hover:border-border/80'
-                }`}
-              >
-                {taggedConnections.includes(c) ? '✓ ' : ''}{c}
-              </motion.button>
-            ))}
-          </div>
-        </div>
+      {/* Tag Friends (real users) */}
+      {userId && (
+        <FriendTagPicker
+          userId={userId}
+          selectedIds={taggedUserIds}
+          onToggle={(id) => setTaggedUserIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+          )}
+        />
       )}
 
       {/* Submit */}
