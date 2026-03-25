@@ -79,12 +79,14 @@ export function PlantSeedForm({ onPlant, connections = [], userId }: PlantSeedFo
       emotion,
       memoryDate,
       connections: taggedConnections.length > 0 ? taggedConnections : undefined,
+      taggedUserIds: taggedUserIds.length > 0 ? taggedUserIds : undefined,
     });
     setImageUrls([]);
     setDescription('');
     setEmotion('Normal');
     setMemoryDate('');
     setTaggedConnections([]);
+    setTaggedUserIds([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
