@@ -305,6 +305,21 @@ export default function Index() {
                 </span>
               </motion.div>
             )}
+            {/* Friends button */}
+            <button
+              onClick={() => setShowFriends(true)}
+              className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+              title="Friends"
+            >
+              <Users className="w-4 h-4" />
+            </button>
+            {/* Tag notifications */}
+            {session?.user && (
+              <TagNotifications userId={session.user.id} onTagApproved={() => {
+                // Reload memories to include newly approved tags
+                window.location.reload();
+              }} />
+            )}
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
