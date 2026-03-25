@@ -97,25 +97,47 @@ export default function Index() {
     };
 
     const loadMemories = async () => {
-      const { data } = await supabase
+      // Own memories
+      const { data: ownData } = await supabase
         .from('memories')
         .select('*')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: true });
 
-      if (data) {
-        setMemories(data.map((m: any) => ({
-          id: m.id,
-          imageUrl: m.image_url,
-          imageUrls: m.image_urls || [],
-          isCollection: m.is_collection,
-          description: m.description,
-          emotion: m.emotion as Emotion,
-          timestamp: new Date(m.created_at),
-          memoryDate: m.memory_date,
-          connections: m.connections || undefined,
-        })));
+      // Tagged & approved memories from others
+      const { data: tagData } = await supabase
+        .from('memory_tags')
+        .select('memory_id')
+        .eq('tagged_user_id', session.user.id)
+        .eq('status', 'approved');
+
+      let taggedMemories: any[] = [];
+      if (tagData && tagData.length > 0) {
+        const taggedIds = tagData.map(t => t.memory_id);
+        const { data: tMems } = await supabase
+          .from('memories')
+          .select('*')
+          .in('id', taggedIds);
+        taggedMemories = tMems || [];
       }
+
+      const allRaw = [...(ownData || []), ...taggedMemories];
+      // Deduplicate by id
+      const seen = new Set<string>();
+      const unique = allRaw.filter(m => { if (seen.has(m.id)) return false; seen.add(m.id); return true; });
+
+      setMemories(unique.map((m: any) => ({
+        id: m.id,
+        imageUrl: m.image_url,
+        imageUrls: m.image_urls || [],
+        isCollection: m.is_collection,
+        description: m.description,
+        emotion: m.emotion as Emotion,
+        timestamp: new Date(m.created_at),
+        memoryDate: m.memory_date,
+        connections: m.connections || undefined,
+        isTagged: m.user_id !== session.user.id,
+      })));
     };
 
     loadProfile();
