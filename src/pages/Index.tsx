@@ -144,7 +144,7 @@ export default function Index() {
     loadMemories();
   }, [session]);
 
-  const handlePlant = useCallback(async (data: Omit<Memory, 'id' | 'timestamp'>) => {
+  const handlePlant = useCallback(async (data: Omit<Memory, 'id' | 'timestamp'> & { taggedUserIds?: string[] }) => {
     if (!session?.user) return;
 
     const { data: inserted, error } = await supabase
@@ -168,6 +168,16 @@ export default function Index() {
     }
 
     if (inserted) {
+      // Create memory tags for tagged friends
+      if (data.taggedUserIds && data.taggedUserIds.length > 0) {
+        const tagRows = data.taggedUserIds.map(uid => ({
+          memory_id: inserted.id,
+          tagged_user_id: uid,
+          tagged_by_user_id: session.user.id,
+        }));
+        await supabase.from('memory_tags').insert(tagRows);
+      }
+
       const newMemory: Memory = {
         id: inserted.id,
         imageUrl: inserted.image_url,
