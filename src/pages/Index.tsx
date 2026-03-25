@@ -246,7 +246,7 @@ export default function Index() {
             style={{ background: 'var(--gradient-panel)' }}
           >
             <div className="w-[340px] h-full flex flex-col p-6">
-              <PlantSeedForm onPlant={handlePlant} connections={user.connections} />
+              <PlantSeedForm onPlant={handlePlant} connections={user.connections} userId={session?.user?.id} />
             </div>
           </motion.aside>
         )}
