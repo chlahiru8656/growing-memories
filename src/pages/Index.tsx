@@ -408,6 +408,13 @@ export default function Index() {
         onClose={() => setSelectedMemory(null)}
         onDelete={handleDelete}
       />
+
+      {/* Friends panel */}
+      <AnimatePresence>
+        {showFriends && session?.user && (
+          <FriendsPanel userId={session.user.id} onClose={() => setShowFriends(false)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
