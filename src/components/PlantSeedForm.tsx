@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, Leaf, Image as ImageIcon, X, CalendarDays, Users } from 'lucide-react';
+import { Upload, Leaf, Image as ImageIcon, X, CalendarDays } from 'lucide-react';
 import { Memory, Emotion } from '@/types/memory';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { FriendTagPicker } from './FriendTagPicker';
 
 interface PlantSeedFormProps {
-  onPlant: (memory: Omit<Memory, 'id' | 'timestamp'>) => void;
+  onPlant: (memory: Omit<Memory, 'id' | 'timestamp'> & { taggedUserIds?: string[] }) => void;
   connections?: string[];
+  userId?: string;
 }
 
 const EMOTIONS: { value: Emotion; label: string }[] = [
