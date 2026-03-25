@@ -25,6 +25,7 @@ export function PlantSeedForm({ onPlant, connections = [], userId }: PlantSeedFo
   const [emotion, setEmotion] = useState<Emotion>('Normal');
   const [memoryDate, setMemoryDate] = useState<string>('');
   const [taggedConnections, setTaggedConnections] = useState<string[]>([]);
+  const [taggedUserIds, setTaggedUserIds] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
