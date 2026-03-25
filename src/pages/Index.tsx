@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trees, Sparkles, ChevronLeft, ChevronRight, LogOut, TreePine, List } from 'lucide-react';
+import { Trees, Sparkles, ChevronLeft, ChevronRight, LogOut, TreePine, List, Users } from 'lucide-react';
 import { Memory, Emotion, UserProfile, calculateAge } from '@/types/memory';
 import { PlantSeedForm } from '@/components/PlantSeedForm';
 import { MemoryTree3D } from '@/components/MemoryTree3D';
 import { MemoryModal } from '@/components/MemoryModal';
 import { AuthPage } from '@/components/AuthPage';
 import { TimelineView } from '@/components/TimelineView';
+import { FriendsPanel } from '@/components/FriendsPanel';
+import { TagNotifications } from '@/components/TagNotifications';
 import { getDominantSeason } from '@/lib/seasonTheme';
 import { supabase } from '@/integrations/supabase/client';
 
