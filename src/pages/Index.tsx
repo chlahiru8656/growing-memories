@@ -30,6 +30,7 @@ export default function Index() {
   const [recentMemory, setRecentMemory] = useState<Memory | null>(null);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [viewMode, setViewMode] = useState<'tree' | 'timeline'>('tree');
+  const [showFriends, setShowFriends] = useState(false);
 
   // Auth listener
   useEffect(() => {
