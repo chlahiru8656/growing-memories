@@ -18,7 +18,7 @@ const EMOTIONS: { value: Emotion; label: string }[] = [
   { value: 'Special', label: '⭐ Special' },
 ];
 
-export function PlantSeedForm({ onPlant, connections = [] }: PlantSeedFormProps) {
+export function PlantSeedForm({ onPlant, connections = [], userId }: PlantSeedFormProps) {
   const [isCollection, setIsCollection] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [description, setDescription] = useState('');
